@@ -1,0 +1,29 @@
+name: Update TABS database
+
+on:
+  schedule:
+    - cron: '23 11 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tabs-database-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test scraper safeguards
+        run: python -m unittest discover -s tests -p 'test_tabs_sync.py' -v
+      - name: Update Neon from public TABS
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -u scripts/sync_tabs.py --refresh-limit 500

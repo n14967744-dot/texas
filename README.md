@@ -42,7 +42,7 @@ Vercel can use the default `npm run build` command. No Sites or Cloudflare setup
 - Last checked means the record's existing `fetched_at`, not an independent check of the live TABS website. Reload re-queries Neon; it does not scrape TABS.
 - Missing information displays as “Not listed.” TABS statuses and estimated dates do not confirm opening, construction progress, or purchasing needs.
 
-Notes, shortlists, login, outreach, AI scoring, and scraper scheduling are intentionally deferred. There are no database writes or fake/demo records.
+Notes, shortlists, login, outreach, and AI scoring are intentionally deferred. The web app only reads the database; the separate updater below writes verified source records. There are no fake/demo records.
 
 ## Checks
 
@@ -61,6 +61,42 @@ Tests cover query safety, calendar filters, validation, and source-link safety. 
 - Prospect filters cover territory, tenant/owner role, search, and estimated completion (next six months, next 90 days, 91 days to six months, or any date).
 - Prospect counts and construction values reflect the selected filters. Opening a prospect shows all linked projects across dates and territories, with contacts and individual project details.
 - Grouping requires an exact normalized name and usable US phone number. Without a usable phone, records remain separate. A filing's tenant name may be a person rather than a business: these are contact groups, not verified business histories.
-- There is no scraper or automatic database refresh in this repository. `fetched_at` records the existing source sync time.
+- `fetched_at` records the last successful detail-page refresh for that specific project. A daily discovery run does not mean every historical record was rechecked that day.
 
 Additional APIs: `GET /api/prospects` and `GET /api/prospects/detail`.
+
+## Daily source updates
+
+`scripts/sync_tabs.py` uses the same public TDLR TABS search endpoint as the state's website, then parses the public project detail pages. No paid scraper service, browser, Python packages, or TABS account is needed. The website remains on Vercel; GitHub Actions runs the updater separately.
+
+### Activate the schedule
+
+1. In GitHub, open **Settings → Secrets and variables → Actions → New repository secret**.
+2. Name the secret `DATABASE_URL`; use the same Neon connection string as Vercel. Vercel environment variables are not automatically shared with GitHub Actions.
+3. Open **Actions → Update TABS database → Run workflow** to verify a first run.
+
+The workflow runs daily at **11:23 UTC** (6:23 a.m. Central daylight time / 5:23 a.m. Central standard time). GitHub can delay scheduled jobs. Public-repository schedules may be disabled after 60 days with no repository activity; check Actions periodically and re-enable the workflow if needed. Failed runs appear in Actions and can generate GitHub's normal workflow-failure notifications.
+
+### What gets refreshed
+
+- Discovery starts seven days before the last successful discovery watermark and continues through today in America/Chicago. On the first run it starts seven days before the latest stored registration date. An empty database requires an explicit `--since YYYY-MM-DD`.
+- Every discovered project is fetched from its detail page and inserted or updated by `project_number`. The seven-day overlap catches late registrations and edits to recent filings; it is not a guarantee against arbitrarily backdated registrations.
+- Each daily run also rechecks up to 500 older detail pages, rotating oldest-first: 400 active/recent projects and 100 historical projects. Active/recent means estimated completion within the past 180 days or later (or unknown), excluding Project Closed and Inspection Completed. This is a refresh priority, not a claim about actual construction activity.
+- Older records are therefore refreshed over multiple runs, **not all daily**. Adjust `--refresh-limit` in the workflow to change that budget. Source records not already in Neon and older than the discovery window require an explicit backfill.
+- Source requests are limited to two starts per second across at most four workers, with timeouts and retries. Unexpected HTML, mismatched identifiers, incomplete sections, and invalid dates are rejected without overwriting the record.
+- No projects are deleted. Existing `public.projects` columns are preserved; two small tracking tables, `public.tabs_sync_state` and `public.tabs_sync_runs`, record discovery progress, a run lease, counts, and success/failure. The first run creates them. A failure retains the discovery lower bound so the next run retries the gap.
+- Database credentials are only read from the environment, never source code or log output. Keep the scheduled writer's connection in GitHub Actions secrets.
+
+### Manual runs
+
+With Python 3.12+ and `DATABASE_URL` exported in your shell:
+
+```sh
+python -m unittest discover -s tests -p 'test_tabs_sync.py' -v
+python scripts/sync_tabs.py --dry-run --max-projects 3 --refresh-limit 0
+python scripts/sync_tabs.py
+# Explicit catch-up/backfill; includes the start date:
+python scripts/sync_tabs.py --since 2026-09-28 --refresh-limit 0
+```
+
+`--dry-run` never creates tracking tables or writes projects. `--max-projects` is for testing and never advances the discovery watermark. Failed records leave the job failed while preserving successful upserts; retrying is safe. The updater does not load `.env.local` automatically.
