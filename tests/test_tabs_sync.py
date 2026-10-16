@@ -61,6 +61,29 @@ class ParserTests(unittest.TestCase):
         with self.assertRaises(sync.SyncError):
             list(sync.search(HTTP(), date(2026, 10, 1), date(2026, 10, 2)))
 
+    def test_batch_upsert_binds_source_text_and_preserves_absent_index_metadata(self):
+        import json
+        row = sync.parse_detail(fixture(), 'TABS2027000001')
+        text = "Example'); DROP TABLE projects; --"
+        row['project_name'] = text
+        row['index_status_code'] = 3008
+        calls = []
+        class DB(sync.Database):
+            def __init__(self):
+                pass
+            def query(self, sql, params):
+                calls.append((sql, params))
+                return [{'inserted': True}]
+        DB().upsert_many([row])
+        sql, params = calls[0]
+        self.assertNotIn(text, sql)
+        self.assertIn('COALESCE(EXCLUDED.index_status_code, projects.index_status_code)', sql)
+        self.assertIn('ON CONFLICT (project_number) DO UPDATE', sql)
+        self.assertNotIn('DELETE', sql)
+        decoded = json.loads(params[0])
+        self.assertEqual(decoded[0]['project_name'], text)
+        self.assertIsInstance(decoded[0]['sections'], dict)
+
 
 if __name__ == '__main__':
     unittest.main()

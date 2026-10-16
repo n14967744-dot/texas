@@ -213,13 +213,20 @@ class Database:
         return data['rows']
 
     def upsert(self, row):
+        return self.upsert_many([row])[0]['inserted']
+
+    def upsert_many(self, rows):
+        # Batch writes avoid opening a remote database request for each project.
         # Keys come exclusively from this module, never from source page labels.
-        cols = list(row)
-        params = [row[k] for k in cols]
-        values = [f'${i+1}' + ('::jsonb' if k == 'sections' else '') for i, k in enumerate(cols)]
-        updates = ', '.join(f'{k}=EXCLUDED.{k}' for k in cols if k != 'project_number')
-        return self.query(f"INSERT INTO public.projects ({', '.join(cols)}, fetched_at) VALUES ({', '.join(values)}, now()) "
-                          f"ON CONFLICT (project_number) DO UPDATE SET {updates}, fetched_at=now() RETURNING (xmax=0) AS inserted", params)[0]['inserted']
+        cols = sorted(set().union(*(row.keys() for row in rows)))
+        metadata = {'project_id', 'project_created_on', 'index_status_code', 'city_code',
+                    'county_code', 'work_type_code', 'data_version_id'}
+        updates = ', '.join(f'{k}=' + (f'COALESCE(EXCLUDED.{k}, projects.{k})' if k in metadata else f'EXCLUDED.{k}')
+                            for k in cols if k != 'project_number')
+        payload = [{**row, 'sections': json.loads(row['sections'])} for row in rows]
+        return self.query(f"INSERT INTO public.projects ({', '.join(cols)}, fetched_at) "
+            f"SELECT {', '.join('x.'+k for k in cols)}, now() FROM jsonb_populate_recordset(NULL::public.projects,$1::jsonb) x "
+            f"ON CONFLICT (project_number) DO UPDATE SET {updates}, fetched_at=now() RETURNING (xmax=0) AS inserted", [json.dumps(payload)])
 
 
 def search(http, begin, end):
@@ -319,33 +326,51 @@ def main():
         print(f'Found {len(discovered)} registrations in discovery window.', flush=True)
         if args.max_projects:
             discovered = discovered[:args.max_projects]
-        known = {r['project_number'] for r in db.query('SELECT project_number FROM public.projects')}
+        known_rows = db.query('SELECT project_number, fetched_at::text FROM public.projects')
+        known = {r['project_number'] for r in known_rows}
+        # A retry can reuse pages successfully refreshed within six hours. This
+        # prevents one failed page from repeatedly re-fetching the entire gap.
+        recent_cutoff = datetime.now(ZoneInfo('UTC')) - timedelta(hours=6)
+        recently_checked = {r['project_number'] for r in known_rows
+                            if datetime.fromisoformat(r['fetched_at']) >= recent_cutoff}
         # Existing overlap rows are also refreshed, including late edits.
-        work = {i['ProjectNumber']: i for i in discovered}
+        work = {i['ProjectNumber']: i for i in discovered if i['ProjectNumber'] not in recently_checked}
         if args.refresh_limit:
             # Rotate older pages fairly. 80% active/recent; 20% historical, no starvation.
             active = "(completion_date IS NULL OR completion_date >= CURRENT_DATE - 180) AND COALESCE(current_status,'') NOT IN ('Project Closed','Inspection Completed')"
             for condition, limit in ((active, args.refresh_limit * 4 // 5), ('NOT (' + active + ')', args.refresh_limit - args.refresh_limit * 4 // 5)):
                 for row in db.query(f'SELECT project_number FROM public.projects WHERE {condition} ORDER BY fetched_at ASC, project_number ASC LIMIT $1', [limit]):
-                    work.setdefault(row['project_number'], {'ProjectNumber': row['project_number']})
+                    if row['project_number'] not in recently_checked:
+                        work.setdefault(row['project_number'], {'ProjectNumber': row['project_number']})
         print(f'Checking {len(work)} detail pages ({sum(k not in known for k in work)} missing from database).', flush=True)
+        pending = []
         with ThreadPoolExecutor(max_workers=args.workers) as pool:
             futures = {pool.submit(enrich, http, item): key for key, item in work.items()}
             for completed, future in enumerate(as_completed(futures), 1):
                 key = futures[future]
                 try:
                     row = future.result()
-                    is_new = key not in known if args.dry_run else db.upsert(row)
-                    inserted += int(is_new)
-                    updated += int(not is_new)
+                    if args.dry_run:
+                        inserted += int(key not in known)
+                        updated += int(key in known)
+                    else:
+                        pending.append(row)
                 except Exception as error:
                     failed += 1
                     message = str(error) if isinstance(error, SyncError) else 'Unexpected parser/database error.'
                     print(f'Failed {key}: {message}', flush=True)
+                if pending and (len(pending) >= 25 or completed == len(work)):
+                    # A database batch failure aborts the run; no successful
+                    # discovery checkpoint is recorded. Upserts are retry-safe.
+                    result = db.upsert_many(pending)
+                    inserted += sum(int(r['inserted']) for r in result)
+                    updated += sum(int(not r['inserted']) for r in result)
+                    pending.clear()
                 if completed % 50 == 0 or completed == len(work):
                     print(f'Progress {completed}/{len(work)}: {inserted} added, {updated} refreshed, {failed} failed.', flush=True)
                     if not args.dry_run:
                         db.query("UPDATE public.tabs_sync_state SET lease_until=now()+interval '3 hours' WHERE name='daily' AND lease_token=$1", [run_id])
+                        db.query('UPDATE public.tabs_sync_runs SET inserted=$2,updated=$3,failed=$4 WHERE id=$1', [run_id,inserted,updated,failed])
         if not args.dry_run:
             if failed == 0 and args.max_projects is None:
                 db.query("UPDATE public.tabs_sync_state SET discovery_through=GREATEST(COALESCE(discovery_through,$1::date),$1::date),retry_from=NULL WHERE name='daily' AND lease_token=$2", [today.isoformat(), run_id])
