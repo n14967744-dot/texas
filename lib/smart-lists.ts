@@ -26,6 +26,10 @@ export interface SmartListDefinition {
   fields?: readonly SmartListField[];
   /** When true, the list page starts with the upcoming-only toggle on. */
   upcomingOnlyDefault?: boolean;
+  /** Initial sort column (must be a /api/projects sort key). */
+  defaultSort?: 'estimated_cost' | 'registration_date' | 'completion_date' | 'project_name' | 'location_address' | 'current_status';
+  /** Initial sort direction. */
+  defaultDirection?: 'asc' | 'desc';
   minEstimatedCost?: number;
   statuses?: readonly string[];
   typesOfWork?: readonly string[];
@@ -49,6 +53,8 @@ const DATA_CENTERS: SmartListDefinition = {
   description:
     'Commercial and hyperscale data center filings across Texas TABS — new builds, data halls, fit-outs, and clear operator campus work. Keyword-matched so new registrations appear automatically.',
   upcomingOnlyDefault: true,
+  defaultSort: 'estimated_cost',
+  defaultDirection: 'desc',
   include: [
     // Primary DC vocabulary
     String.raw`data[\s_\-]*cent(?:er|re)s?`,

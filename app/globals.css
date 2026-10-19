@@ -127,5 +127,11 @@ th:nth-child(1){width:21%}th:nth-child(2){width:18%}th:nth-child(3){width:20%}th
 .smart-list-card-cta{font-size:12px;font-weight:650;color:var(--red)}
 
 /* Smart lists reuse the desktop flex shell; never cap .table-region with a fixed max-height. */
+
+.date-presets{display:flex;flex-direction:column;gap:8px;min-width:160px}.date-presets-label{font-size:12px;font-weight:600;color:#34445a}.date-preset-row{display:flex;flex-wrap:wrap;gap:6px}.date-preset{border:1px solid #dce2e9;background:#fff;border-radius:4px;padding:5px 9px;font-size:11px;color:#3b4b60}.date-preset:hover{background:#f5f7fa;border-color:#bcc8d6}.date-preset.active{border-color:#9eb0c5;background:#f5f8fc;color:var(--navy);font-weight:600}
+.smart-list-controls{display:flex;flex-wrap:wrap;gap:18px;align-items:center}.smart-list-controls .saved-views{display:flex;gap:18px}.table-region.is-refreshing{opacity:.92}
+.smart-list-controls>button{background:none;border:0;border-bottom:3px solid transparent;padding:12px 2px 13px;font-size:13px;color:#637187}
+.smart-list-controls>button:hover{color:var(--navy)}
+.smart-list-controls>button.active{color:var(--red);font-weight:650;border-bottom-color:var(--red)}
 .smart-list-shell .result-count{display:inline-block;font-weight:600;color:#3b4b60}
 @media(max-width:540px){.smart-list-shell .result-count{display:inline-block}}

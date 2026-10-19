@@ -63,5 +63,10 @@ export function buildProjectSearchParams(
   } else if (filters.upcoming) {
     p.set('upcoming', '1');
   }
+  // When sort differs from the API default, always pair direction so URLs are explicit
+  // even if direction happens to match the API default (desc).
+  if (p.has('sort') && !p.has('direction')) {
+    p.set('direction', filters.direction);
+  }
   return p.toString();
 }
