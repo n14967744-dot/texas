@@ -65,6 +65,12 @@ Include/exclude patterns must work in both JavaScript and PostgreSQL `~*` (prefe
 
 On smart list pages, **Coverage** can be **Territory counties** (legacy office-county filter) or **Within N mi** of the selected office tab (30 / 60 / 100 miles, default 60). All Texas / All CTWP territories uses distance to the **nearest** office. Office coordinates are Census 2024 city centroids (no street addresses in-repo). Project coordinates are Census Geocoder address matches when available, else Gazetteer city/county centroids (`data/dc-geocodes.json`).
 
+### Ranked priority lists (curated)
+
+`/lists/bryan-priority` is a curated list: every project type within 60 mi of the Bryan office that is upcoming or still open, reviewed for office-equipment fit and ranked (timing → fit → size). Membership, rank, tier (Hot / Warm / Pipeline) and a one-line “why” note come from `lib/rankings/bryan-priority.ts`, registered in `lib/smart-list-rankings.ts`. Reviewed bad fits are listed there as `hidden` and use the same **Show hidden** badge/reason mechanism as `lib/smart-list-review.ts`. The list opens on the Bryan tab, 60 mi radius, sorted by `sort=rank`; CSV export adds `priority_rank`, `priority_tier`, `priority_note`.
+
+To add a priority list for another office: add `lib/rankings/<id>.ts`, register it in `RANKINGS`, add a `SmartListDefinition` with `curated: true` and `defaultOffice`, and add any missing project geocodes to `data/project-geocodes.json` (regenerate `lib/project-geocodes-data.ts`). Curated lists are snapshots — new TABS filings do not appear until the ranking file is regenerated.
+
 ## Smart list review (hide / unhide)
 
 Manual overrides live in `lib/smart-list-review.ts`, keyed by TABS `project_number` and list id. They are versioned in git (reversible) and do **not** change the Neon database.

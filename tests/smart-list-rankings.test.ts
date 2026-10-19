@@ -1,0 +1,87 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { RANKINGS, getRanking, getRankingEntry, curatedProjectNumbers, rankOf } from '../lib/smart-list-rankings.ts';
+import { getSmartList, matchesSmartList } from '../lib/smart-lists.ts';
+import { getReviewEntry, hiddenProjectNumbers } from '../lib/smart-list-review.ts';
+import { buildWhere, parseFilters } from '../lib/query.ts';
+import { browserDefaults } from '../lib/browser-defaults.ts';
+import { buildProjectSearchParams } from '../lib/project-params.ts';
+import { getOfficeBranch } from '../lib/offices.ts';
+import { distanceToOffice } from '../lib/geo.ts';
+
+test('every ranking is registered to a curated smart list with contiguous unique ranks', () => {
+  for (const ranking of RANKINGS) {
+    const list = getSmartList(ranking.listId);
+    assert.ok(list?.curated, `${ranking.listId} must be a curated smart list`);
+    const ranks = ranking.ranked.map((e) => e.rank).sort((a, b) => a - b);
+    assert.deepEqual(ranks, ranks.map((_, i) => i + 1));
+    const nums = curatedProjectNumbers(ranking.listId);
+    assert.equal(new Set(nums).size, nums.length, 'ranked and hidden must not overlap');
+    for (const entry of ranking.ranked) {
+      assert.match(entry.projectNumber, /^TABS\d+$/);
+      assert.ok(['hot', 'warm', 'pipeline'].includes(entry.tier));
+      assert.ok(entry.note.length > 10);
+    }
+    for (const hidden of ranking.hidden) assert.ok(hidden.reason.length > 3);
+  }
+});
+
+test('bryan-priority: ranked rows are tier-ordered and within 60 mi of Bryan', () => {
+  const ranking = getRanking('bryan-priority')!;
+  const order = { hot: 0, warm: 1, pipeline: 2 } as const;
+  const sorted = [...ranking.ranked].sort((a, b) => a.rank - b.rank);
+  for (let i = 1; i < sorted.length; i += 1) assert.ok(order[sorted[i - 1].tier] <= order[sorted[i].tier]);
+  const bryan = getOfficeBranch('bryan')!;
+  for (const n of curatedProjectNumbers('bryan-priority')) {
+    const hit = distanceToOffice(n, bryan);
+    assert.ok(hit, `${n} needs a geocode`);
+    assert.ok(hit!.distanceMi <= 60.05, `${n} is ${hit!.distanceMi} mi`);
+  }
+});
+
+test('ranking hides flow through the existing review/hide mechanism', () => {
+  const ranking = getRanking('bryan-priority')!;
+  const hidden = ranking.hidden[0];
+  assert.equal(getReviewEntry('bryan-priority', hidden.projectNumber)?.decision, 'hide');
+  assert.ok(hiddenProjectNumbers('bryan-priority').includes(hidden.projectNumber));
+  const top = ranking.ranked.find((e) => e.rank === 1)!;
+  assert.equal(getReviewEntry('bryan-priority', top.projectNumber), undefined);
+  assert.equal(getRankingEntry('bryan-priority', top.projectNumber)?.rank, 1);
+  assert.equal(rankOf('bryan-priority', hidden.projectNumber), Number.POSITIVE_INFINITY);
+  // data-centers hides are unaffected
+  assert.ok(hiddenProjectNumbers('data-centers').includes('TABS2025007641'));
+});
+
+test('curated list SQL uses membership + hidden exclusion, not keyword regex', () => {
+  const filters = parseFilters(new URLSearchParams({ list: 'bryan-priority', office: 'bryan', sort: 'rank', direction: 'asc', upcoming: '0', scope: 'radius', radius: '60' }));
+  const { where, params } = buildWhere(filters, null, '2026-10-19');
+  assert.ok(where.includes('project_number IN ('));
+  assert.ok(where.includes('project_number NOT IN ('));
+  assert.equal(where.includes('~*'), false);
+  const top = getRanking('bryan-priority')!.ranked[0].projectNumber;
+  assert.ok(params.includes(top));
+  assert.ok(matchesSmartList({ project_number: top }, getSmartList('bryan-priority')!));
+  assert.equal(matchesSmartList({ project_number: 'TABS0000000000' }, getSmartList('bryan-priority')!), false);
+});
+
+test('rank sort is only valid on ranked lists', () => {
+  assert.throws(() => parseFilters(new URLSearchParams({ sort: 'rank' })));
+  assert.throws(() => parseFilters(new URLSearchParams({ list: 'data-centers', sort: 'rank' })));
+  assert.equal(parseFilters(new URLSearchParams({ list: 'bryan-priority', sort: 'rank' })).sort, 'rank');
+});
+
+test('bryan-priority defaults: Bryan office, 60 mi radius, rank ascending', () => {
+  const defaults = browserDefaults('bryan-priority');
+  assert.equal(defaults.office, 'bryan');
+  assert.equal(defaults.scope, 'radius');
+  assert.equal(defaults.radius, 60);
+  assert.equal(defaults.sort, 'rank');
+  assert.equal(defaults.direction, 'asc');
+  const params = new URLSearchParams(buildProjectSearchParams(defaults, { listId: 'bryan-priority' }));
+  assert.equal(params.get('office'), 'bryan');
+  assert.equal(params.get('sort'), 'rank');
+  assert.equal(params.get('scope'), 'radius');
+  assert.equal(params.get('list'), 'bryan-priority');
+  // data-centers keeps its All Texas default
+  assert.equal(browserDefaults('data-centers').office, 'texas');
+});

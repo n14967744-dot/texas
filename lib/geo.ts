@@ -1,6 +1,7 @@
 import { OFFICES, getOfficeBranch, type OfficeBranch } from './offices.ts';
 import { haversineMiles } from './radius.ts';
 import geocodeDoc from './dc-geocodes-data.ts';
+import extraGeocodeDoc from './project-geocodes-data.ts';
 
 export type GeoPrecision = 'address' | 'city' | 'county' | 'none';
 
@@ -12,7 +13,11 @@ export type ProjectGeocode = {
   county?: string;
 };
 
-const PROJECT_GEOCODES: Record<string, ProjectGeocode> = geocodeDoc.projects as Record<string, ProjectGeocode>;
+// Data-center geocodes plus curated-list projects (data/project-geocodes.json).
+const PROJECT_GEOCODES: Record<string, ProjectGeocode> = {
+  ...(extraGeocodeDoc.projects as Record<string, ProjectGeocode>),
+  ...(geocodeDoc.projects as Record<string, ProjectGeocode>),
+};
 
 export type DistanceHit = {
   projectNumber: string;

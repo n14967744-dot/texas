@@ -26,7 +26,7 @@ export default function SmartListsIndexPage() {
           <div>
             <div className="eyebrow territory-eyebrow">CURATED FILTERS</div>
             <h1>Smart Lists</h1>
-            <p>Keyword-matched project lists that update as new TABS filings arrive. Add another list by appending one entry in <code>lib/smart-lists.ts</code>.</p>
+            <p>Keyword lists update as new TABS filings arrive; ranked priority lists are reviewed snapshots refreshed via <code>lib/rankings/</code>. Add another list by appending one entry in <code>lib/smart-lists.ts</code>.</p>
           </div>
         </div>
         <ul className="smart-list-cards">
