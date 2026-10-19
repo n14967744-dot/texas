@@ -1,4 +1,5 @@
 import { appendSmartListClauses, getSmartList } from './smart-lists.ts';
+import { hiddenProjectNumbers } from './smart-list-review.ts';
 
 export type SqlQuery = { query: string; params: (string | number)[] };
 export type View = 'all' | 'recent' | 'soon' | 'completed';
@@ -11,6 +12,8 @@ export interface Filters {
   list: string;
   /** Est. completion on/after today and not Closed / Inspection Complete. */
   upcoming: boolean;
+  /** When true on a smart list, include manually hidden projects. */
+  hidden: boolean;
 }
 export class FilterError extends Error {}
 function dateParam(params: URLSearchParams, key: string) {
@@ -44,10 +47,14 @@ export function parseFilters(params: URLSearchParams): Filters {
   const upcomingRaw = get('upcoming');
   if (upcomingRaw && !['1', 'true', '0', 'false'].includes(upcomingRaw)) throw new FilterError('Invalid upcoming filter.');
   const upcoming = upcomingRaw === '1' || upcomingRaw === 'true';
+  const hiddenRaw = get('hidden');
+  if (hiddenRaw && !['1', 'true', '0', 'false'].includes(hiddenRaw)) throw new FilterError('Invalid hidden filter.');
+  const hidden = hiddenRaw === '1' || hiddenRaw === 'true';
+  if (hidden && !list) throw new FilterError('Show hidden is only available on smart lists.');
   const dates = { registeredFrom: dateParam(params, 'registeredFrom'), registeredTo: dateParam(params, 'registeredTo'), completionFrom: dateParam(params, 'completionFrom'), completionTo: dateParam(params, 'completionTo') };
   if (dates.registeredFrom && dates.registeredTo && dates.registeredFrom > dates.registeredTo) throw new FilterError('Registration date range is reversed.');
   if (dates.completionFrom && dates.completionTo && dates.completionFrom > dates.completionTo) throw new FilterError('Completion date range is reversed.');
-  return { coverage: coverage as 'all' | 'outside', office: get('office') || 'all', q, city: get('city'), county: get('county'), status: get('status'), ...dates, view: view as View, sort: sort as keyof typeof SORTS, direction: direction as 'asc' | 'desc', page, pageSize, list, upcoming };
+  return { coverage: coverage as 'all' | 'outside', office: get('office') || 'all', q, city: get('city'), county: get('county'), status: get('status'), ...dates, view: view as View, sort: sort as keyof typeof SORTS, direction: direction as 'asc' | 'desc', page, pageSize, list, upcoming, hidden };
 }
 export function businessToday(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
@@ -77,6 +84,12 @@ export function buildWhere(filters: Filters, counties: readonly string[] | null,
     const list = getSmartList(filters.list);
     if (!list) throw new FilterError('Unknown smart list.');
     appendSmartListClauses(list, bind, clauses);
+    if (!filters.hidden) {
+      const hiddenNums = hiddenProjectNumbers(filters.list);
+      if (hiddenNums.length) {
+        clauses.push(`project_number NOT IN (${hiddenNums.map(bind).join(',')})`);
+      }
+    }
   }
   if (filters.upcoming) {
     const b = bind(today);

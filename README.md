@@ -60,6 +60,19 @@ Curated project lists live in `lib/smart-lists.ts`. Data centers is the first li
 
 Include/exclude patterns must work in both JavaScript and PostgreSQL `~*` (prefer `[\s\-_]*` and `(?:...)`; avoid `\b`). Matching is case-insensitive against project name, facility name, and scope by default.
 
+## Smart list review (hide / unhide)
+
+Manual overrides live in `lib/smart-list-review.ts`, keyed by TABS `project_number` and list id. They are versioned in git (reversible) and do **not** change the Neon database.
+
+| Decision | Effect |
+| --- | --- |
+| `hide` | Excluded from the smart list by default. Enable **Show hidden** (`hidden=1`) to see them with a red **Hidden** badge and reason. |
+| `review` | Still listed; shows an amber **Review** badge with reason. |
+| `keep` + `costNote` | Still listed; shows a **Cost note** badge (used for extreme cost outliers). |
+
+To hide a project: add `{ projectNumber, listId, decision: 'hide', reason }` and open a PR. To unhide: remove that entry or change `decision` and merge. Keyword `exclude` patterns in `lib/smart-lists.ts` catch future obvious false positives; prefer specific phrases so real data-center shells with incidental “office” language are not dropped.
+
+
 ## Checks
 
 ```sh

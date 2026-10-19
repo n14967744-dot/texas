@@ -12,6 +12,7 @@ import { buildProjectSearchParams } from '@/lib/project-params';
 import { browserDefaults, sortMetaLabel } from '@/lib/browser-defaults';
 import { COMPLETION_PRESETS, completionPresetRange, type CompletionPresetId } from '@/lib/date-presets';
 import { clearProjectCache, readProjectCache, writeProjectCache } from '@/lib/project-cache';
+import { getReviewEntry } from '@/lib/smart-list-review';
 
 type View = 'all' | 'recent' | 'soon' | 'completed';
 type Sort = 'estimated_cost' | 'project_name' | 'location_address' | 'current_status' | 'completion_date' | 'registration_date';
@@ -47,6 +48,7 @@ function readUrl(defaults: State): State {
   const size = Number(p.get('pageSize'));
   if ([10, 25, 50].includes(size)) result.pageSize = size;
   if (p.has('upcoming')) result.upcoming = p.get('upcoming') === '1' || p.get('upcoming') === 'true';
+  if (p.has('hidden')) result.hidden = p.get('hidden') === '1' || p.get('hidden') === 'true';
   return result;
 }
 
@@ -55,7 +57,7 @@ function csvEscape(value: string | number | null | undefined) {
   return /["\n,]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-async function downloadListCsv(query: string, filename: string) {
+async function downloadListCsv(query: string, filename: string, listId?: string) {
   const rows: ProjectRow[] = [];
   let page = 1;
   let pages = 1;
@@ -76,7 +78,14 @@ async function downloadListCsv(query: string, filename: string) {
     'location_county', 'current_status', 'type_of_work', 'scope_of_work', 'estimated_cost',
     'registration_date', 'completion_date',
   ];
-  const lines = [cols.join(',')].concat(rows.map((row) => cols.map((col) => csvEscape(row[col])).join(',')));
+  const reviewCols = listId ? (['review_decision', 'review_reason', 'cost_note'] as const) : [];
+  const header = [...cols, ...reviewCols].join(',');
+  const lines = [header].concat(rows.map((row) => {
+    const base = cols.map((col) => csvEscape(row[col]));
+    if (!listId) return base.join(',');
+    const entry = getReviewEntry(listId, row.project_number);
+    return [...base, csvEscape(entry?.decision || 'keep'), csvEscape(entry?.reason || ''), csvEscape(entry?.costNote || '')].join(',');
+  }));
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -221,14 +230,14 @@ export function ProjectBrowser({
       : `${office.counties?.join(', ')} County`;
   const change = (patch: Partial<State>) => setFilters((f) => ({ ...f, ...patch, page: 1 }));
   const switchOffice = (id: OfficeId) => {
-    setFilters({ ...defaults, office: id, upcoming: filters.upcoming });
+    setFilters({ ...defaults, office: id, upcoming: filters.upcoming, hidden: filters.hidden });
     setSearch('');
     setData(null);
     setSelected(null);
     setDatesOpen(false);
   };
   const clear = () => {
-    setFilters({ ...defaults, office: filters.office, view: filters.view, upcoming: filters.upcoming });
+    setFilters({ ...defaults, office: filters.office, view: filters.view, upcoming: filters.upcoming, hidden: filters.hidden });
     setSearch('');
   };
   function reload() {
@@ -240,7 +249,7 @@ export function ProjectBrowser({
     if (exporting) return;
     setExporting(true);
     try {
-      await downloadListCsv(params, `${listId || 'projects'}.csv`);
+      await downloadListCsv(params, `${listId || 'projects'}.csv`, listId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to export projects.');
     } finally {
@@ -359,6 +368,9 @@ export function ProjectBrowser({
             <div className="smart-list-controls" role="group" aria-label="Smart list options">
               <button type="button" className={filters.upcoming ? 'active' : ''} aria-pressed={filters.upcoming} onClick={() => change({ upcoming: !filters.upcoming })}>
                 Upcoming only
+              </button>
+              <button type="button" className={filters.hidden ? 'active' : ''} aria-pressed={filters.hidden} onClick={() => change({ hidden: !filters.hidden })}>
+                Show hidden
               </button>
               {viewTabs}
               <a className="smart-list-catalog-link" href="/lists">All smart lists</a>
@@ -480,6 +492,9 @@ export function ProjectBrowser({
           {list && filters.upcoming && (
             <div className="view-description">Upcoming only: estimated completion on or after today, excluding Project Closed and Inspection Complete. Toggle off to see every match with status so you can filter.</div>
           )}
+          {list && filters.hidden && (
+            <div className="view-description">Showing manually hidden filings (office build-outs, guardhouses, incidental IT rooms, etc.). Hidden rows are excluded from the default list and CSV counts; reasons appear on each row.</div>
+          )}
           {filters.view !== 'all' && (
             <div className="view-description">
               {filters.view === 'recent'
@@ -551,6 +566,17 @@ export function ProjectBrowser({
                         <button className="project-name" onClick={(e) => { e.stopPropagation(); setSelected(p); }}>
                           {p.project_name || p.facility_name || p.project_number}
                         </button>
+                        {listId ? (() => {
+                          const entry = getReviewEntry(listId, p.project_number);
+                          if (!entry) return null;
+                          return (
+                            <span className="review-badges">
+                              {entry.decision === 'hide' && <span className="review-badge hide" title={entry.reason}>Hidden</span>}
+                              {entry.decision === 'review' && <span className="review-badge review" title={entry.reason}>Review</span>}
+                              {entry.costNote && <span className="review-badge cost" title={entry.costNote}>Cost note</span>}
+                            </span>
+                          );
+                        })() : null}
                         <span className="secondary-line">{p.type_of_work || 'Work type not listed'}</span>
                       </td>
                       <td className="address-cell">
