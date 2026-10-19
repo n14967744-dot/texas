@@ -22,6 +22,9 @@ export function browserDefaults(listId?: string): ProjectParamState {
     pageSize: 50,
     upcoming: Boolean(list?.upcomingOnlyDefault),
     hidden: false,
+    // Smart lists default to distance coverage (60 mi of selected office / any office when All Texas).
+    scope: list ? 'radius' : 'territory',
+    radius: 60,
   };
 }
 
@@ -33,9 +36,11 @@ export function sortMetaLabel(sort: string, direction: 'asc' | 'desc'): string {
     project_name: 'project name',
     location_address: 'address',
     current_status: 'status',
+    distance: 'distance',
   };
   const name = labels[sort] || sort;
   if (sort === 'estimated_cost') return `sorted by ${name} (${direction === 'desc' ? 'highest first' : 'lowest first'})`;
+  if (sort === 'distance') return `sorted by ${name} (${direction === 'asc' ? 'nearest first' : 'farthest first'})`;
   if (sort.endsWith('_date')) return `sorted by ${name} (${direction === 'desc' ? 'newest first' : 'oldest first'})`;
   return `sorted by ${name} (${direction === 'asc' ? 'A→Z' : 'Z→A'})`;
 }

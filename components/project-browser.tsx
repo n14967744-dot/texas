@@ -13,9 +13,10 @@ import { browserDefaults, sortMetaLabel } from '@/lib/browser-defaults';
 import { COMPLETION_PRESETS, completionPresetRange, type CompletionPresetId } from '@/lib/date-presets';
 import { clearProjectCache, readProjectCache, writeProjectCache } from '@/lib/project-cache';
 import { getReviewEntry } from '@/lib/smart-list-review';
+import { RADIUS_OPTIONS } from '@/lib/radius';
 
 type View = 'all' | 'recent' | 'soon' | 'completed';
-type Sort = 'estimated_cost' | 'project_name' | 'location_address' | 'current_status' | 'completion_date' | 'registration_date';
+type Sort = 'estimated_cost' | 'project_name' | 'location_address' | 'current_status' | 'completion_date' | 'registration_date' | 'distance';
 type State = ReturnType<typeof browserDefaults> & { office: OfficeId; view: View; sort: Sort };
 
 function baseDefaults(listId?: string): State {
@@ -38,9 +39,12 @@ function readUrl(defaults: State): State {
   for (const k of ['q', 'city', 'county', 'status', 'completionFrom', 'completionTo', 'registeredFrom', 'registeredTo'] as const) {
     result[k] = p.get(k) || '';
   }
-  if (['project_name', 'location_address', 'current_status', 'completion_date', 'registration_date', 'estimated_cost'].includes(p.get('sort') || '')) {
+  if (['project_name', 'location_address', 'current_status', 'completion_date', 'registration_date', 'estimated_cost', 'distance'].includes(p.get('sort') || '')) {
     result.sort = p.get('sort') as Sort;
   }
+  if (p.get('scope') === 'radius' || p.get('scope') === 'territory') result.scope = p.get('scope') as State['scope'];
+  const radius = Number(p.get('radius')); if ([30, 60, 100].includes(radius)) result.radius = radius;
+  if (result.scope !== 'radius' && result.sort === 'distance') { result.sort = defaults.sort; result.direction = defaults.direction; }
   if (p.get('direction') === 'asc') result.direction = 'asc';
   if (p.get('direction') === 'desc') result.direction = 'desc';
   const page = Number(p.get('page'));
@@ -78,13 +82,18 @@ async function downloadListCsv(query: string, filename: string, listId?: string)
     'location_county', 'current_status', 'type_of_work', 'scope_of_work', 'estimated_cost',
     'registration_date', 'completion_date',
   ];
-  const reviewCols = listId ? (['review_decision', 'review_reason', 'cost_note'] as const) : [];
-  const header = [...cols, ...reviewCols].join(',');
+  const reviewCols = listId ? ['review_decision', 'review_reason', 'cost_note'] : [];
+  const distCols = listId && rows.some((r) => r.distance_mi != null) ? ['distance_mi', 'geo_precision'] : [];
+  const header = [...cols, ...reviewCols, ...distCols].join(',');
   const lines = [header].concat(rows.map((row) => {
     const base = cols.map((col) => csvEscape(row[col]));
     if (!listId) return base.join(',');
     const entry = getReviewEntry(listId, row.project_number);
-    return [...base, csvEscape(entry?.decision || 'keep'), csvEscape(entry?.reason || ''), csvEscape(entry?.costNote || '')].join(',');
+    const extra = [csvEscape(entry?.decision || 'keep'), csvEscape(entry?.reason || ''), csvEscape(entry?.costNote || '')];
+    if ('distance_mi' in row && row.distance_mi != null) {
+      extra.push(csvEscape(row.distance_mi), csvEscape(row.geo_precision || ''));
+    }
+    return [...base, ...extra].join(',');
   }));
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -230,14 +239,14 @@ export function ProjectBrowser({
       : `${office.counties?.join(', ')} County`;
   const change = (patch: Partial<State>) => setFilters((f) => ({ ...f, ...patch, page: 1 }));
   const switchOffice = (id: OfficeId) => {
-    setFilters({ ...defaults, office: id, upcoming: filters.upcoming, hidden: filters.hidden });
+    setFilters({ ...defaults, office: id, upcoming: filters.upcoming, hidden: filters.hidden, scope: filters.scope, radius: filters.radius, sort: filters.scope === 'radius' && filters.sort === 'distance' ? 'distance' : defaults.sort, direction: filters.scope === 'radius' && filters.sort === 'distance' ? filters.direction : defaults.direction });
     setSearch('');
     setData(null);
     setSelected(null);
     setDatesOpen(false);
   };
   const clear = () => {
-    setFilters({ ...defaults, office: filters.office, view: filters.view, upcoming: filters.upcoming, hidden: filters.hidden });
+    setFilters({ ...defaults, office: filters.office, view: filters.view, upcoming: filters.upcoming, hidden: filters.hidden, scope: filters.scope, radius: filters.radius });
     setSearch('');
   };
   function reload() {
@@ -260,7 +269,7 @@ export function ProjectBrowser({
     sort: key,
     direction: filters.sort === key
       ? (filters.direction === 'asc' ? 'desc' : 'asc')
-      : (key === 'project_name' || key === 'location_address' || key === 'current_status' ? 'asc' : 'desc'),
+      : (key === 'project_name' || key === 'location_address' || key === 'current_status' || key === 'distance' ? 'asc' : 'desc'),
   });
   const activeCount = [
     filters.coverage === 'outside' ? 'outside' : '',
@@ -372,6 +381,24 @@ export function ProjectBrowser({
               <button type="button" className={filters.hidden ? 'active' : ''} aria-pressed={filters.hidden} onClick={() => change({ hidden: !filters.hidden })}>
                 Show hidden
               </button>
+              <div className="coverage-controls" role="group" aria-label="Coverage mode">
+                <span className="coverage-label">Coverage</span>
+                <button type="button" className={filters.scope === 'territory' ? 'active' : ''} aria-pressed={filters.scope === 'territory'} onClick={() => change({ scope: 'territory', sort: filters.sort === 'distance' ? defaults.sort : filters.sort, direction: filters.sort === 'distance' ? defaults.direction : filters.direction })}>
+                  Territory counties
+                </button>
+                <button type="button" className={filters.scope === 'radius' ? 'active' : ''} aria-pressed={filters.scope === 'radius'} onClick={() => change({ scope: 'radius' })}>
+                  Within {filters.radius} mi
+                </button>
+                {filters.scope === 'radius' && (
+                  <label className="select-control radius-select">
+                    <span className="sr-only">Radius miles</span>
+                    <select aria-label="Radius in miles" value={filters.radius} onChange={(e) => change({ radius: Number(e.target.value) })}>
+                      {RADIUS_OPTIONS.map((mi) => <option key={mi} value={mi}>{mi} miles</option>)}
+                    </select>
+                    <Icon name="down" size={14} />
+                  </label>
+                )}
+              </div>
               {viewTabs}
               <a className="smart-list-catalog-link" href="/lists">All smart lists</a>
               {SMART_LISTS.length > 1 && SMART_LISTS.map((item) => (
@@ -495,6 +522,13 @@ export function ProjectBrowser({
           {list && filters.hidden && (
             <div className="view-description">Showing manually hidden filings (office build-outs, guardhouses, incidental IT rooms, etc.). Hidden rows are excluded from the default list and CSV counts; reasons appear on each row.</div>
           )}
+          {list && filters.scope === 'radius' && (
+            <div className="view-description">
+              {filters.office === 'texas' || filters.office === 'all'
+                ? `Within ${filters.radius} miles of any CTWP office (city-center coordinates). Distance is to the nearest office. Locations use Census address geocodes when available, otherwise city/county centroids.`
+                : `Within ${filters.radius} miles of the ${office.name} office (Census city-center coordinates; no street address on file). Project pins use Census address geocodes when available, otherwise city/county centroids.`}
+            </div>
+          )}
           {filters.view !== 'all' && (
             <div className="view-description">
               {filters.view === 'recent'
@@ -513,6 +547,7 @@ export function ProjectBrowser({
                   {header('Address', 'location_address')}
                   <th scope="col"><span className="column-label">Scope / description</span></th>
                   {header('Est. cost', 'estimated_cost')}
+                  {list && filters.scope === 'radius' && header('Distance', 'distance')}
                   {header('TABS status', 'current_status')}
                   {header('Est. completion', 'completion_date')}
                   {header('Registered', 'registration_date')}
@@ -535,7 +570,7 @@ export function ProjectBrowser({
                   ))
                 ) : error && !data?.projects.length ? (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={list && filters.scope === 'radius' ? 9 : 8}>
                       <div className="state-message" role="alert">
                         <Icon name="alert" size={30} />
                         <h2>Unable to load projects</h2>
@@ -546,7 +581,7 @@ export function ProjectBrowser({
                   </tr>
                 ) : !data?.projects.length ? (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={list && filters.scope === 'radius' ? 9 : 8}>
                       <div className="state-message">
                         <Icon name="search" size={30} />
                         <h2>No projects found</h2>
@@ -585,6 +620,12 @@ export function ProjectBrowser({
                       </td>
                       <td><ScopePreview scope={p.scope_of_work} /></td>
                       <td className="cost-cell">{formatMoney(p.estimated_cost)}</td>
+                      {list && filters.scope === 'radius' && (
+                        <td className="distance-cell" title={p.geo_precision ? `Location precision: ${p.geo_precision}` : undefined}>
+                          {p.distance_mi != null ? `${p.distance_mi.toFixed(1)} mi` : '—'}
+                          {p.geo_precision && p.geo_precision !== 'address' ? <span className="geo-precision">{p.geo_precision}</span> : null}
+                        </td>
+                      )}
                       <td><StatusBadge status={p.current_status} /></td>
                       <td className="date-cell">{formatDate(p.completion_date)}</td>
                       <td className="date-cell registered-cell">{formatDate(p.registration_date)}</td>

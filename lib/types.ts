@@ -12,6 +12,9 @@ export interface ProjectRow {
   registration_date: string | null;
   completion_date: string | null;
   fetched_at: string | null;
+  /** Miles from selected office (radius mode). */
+  distance_mi?: number | null;
+  geo_precision?: string | null;
 }
 export interface Project extends ProjectRow {
   start_date: string | null;
