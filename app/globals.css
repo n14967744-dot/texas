@@ -158,3 +158,4 @@ table.report-table{min-width:0;width:100%;table-layout:auto}.report-table th:nth
 .report-link{color:var(--red);font-weight:600;font-size:12px;text-decoration:none;white-space:nowrap}.report-link:hover{text-decoration:underline}
 .report-other-reasons summary{cursor:pointer}.report-other-reasons ul{margin:8px 0 0;padding-left:18px;color:#4b5b70;font-size:12px;line-height:1.6}
 .report-shell .territory-eyebrow,.report-shell .page-heading p{display:block}
+.report-table td{word-break:normal;overflow-wrap:normal}.report-city{white-space:nowrap}.report-note{overflow-wrap:anywhere}

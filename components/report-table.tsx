@@ -36,7 +36,7 @@ export function ReportTable({ rows, listId, compact = false, showTier = false }:
                     {source ? <a href={source} target="_blank" rel="noreferrer">{row.projectNumber} ↗</a> : row.projectNumber}
                   </span>
                 </td>
-                <td>{row.city || '—'}</td>
+                <td className="report-city">{row.city || "—"}</td>
                 <td className="report-num">{row.distanceMi != null ? `${row.distanceMi.toFixed(0)} mi` : '—'}</td>
                 <td className="report-num">{row.cost != null ? formatMoney(row.cost) : '—'}</td>
                 <td className="report-num">{row.completion ? formatDate(row.completion) : '—'}</td>
