@@ -51,7 +51,7 @@ Curated project lists live in `lib/smart-lists.ts`. Data centers is the first li
 
 - Catalog: `/lists`
 - List page: `/lists/<id>` (example: `/lists/data-centers`)
-- API: `GET /api/projects?list=<id>` — works with the existing office / coverage / city / status / date filters. Add `upcoming=1` for estimated completion on or after today, excluding Project Closed and Inspection Complete.
+- API: `GET /api/projects?list=<id>` — works with the existing office / coverage / city / status / date filters. Add `upcoming=1` for planned finish on or after today, excluding Project Closed and Inspection Complete.
 
 ### Add a list
 
@@ -98,7 +98,7 @@ Tests cover query safety, calendar filters, smart-list matching, validation, and
 
 - `/` browses projects; `/prospects` browses tenant and owner contacts.
 - All CTWP territories is the default. All Texas includes every stored project; an outside-territories filter excludes the configured office counties. The database is not guaranteed to contain every Texas project.
-- Prospect filters cover territory, tenant/owner role, search, and estimated completion (next six months, next 90 days, 91 days to six months, or any date).
+- Prospect filters cover territory, tenant/owner role, search, and planned finish (next six months, next 90 days, 91 days to six months, or any date).
 - Prospect counts and construction values reflect the selected filters. Opening a prospect shows all linked projects across dates and territories, with contacts and individual project details.
 - Grouping requires an exact normalized name and usable US phone number. Without a usable phone, records remain separate. A filing's tenant name may be a person rather than a business: these are contact groups, not verified business histories.
 - `fetched_at` records the last successful detail-page refresh for that specific project. A daily discovery run does not mean every historical record was rechecked that day.
@@ -145,3 +145,9 @@ python scripts/sync_tabs.py --since 2026-09-28 --refresh-limit 0
 ### Priority reports (`/reports/<list-id>`)
 
 Any ranking in `lib/rankings/` that includes a `report` block (office, radius, scanned/reviewed counts, focus cities, method and assumptions in plain English) gets a read-only report at `/reports/<list-id>`, listed on `/reports` and linked from the list page ("View priority report →"). The report shows the Hot tier first, Hot projects in the focus cities, collapsible Warm/Pipeline sections, hidden-by-reason counts and the scoring method. Project details (name, city, cost, completion) are read live from the database; project links open the row's details in the sortable list (`?open=<TABS#>`).
+
+### Dates, state status and Stage
+
+User-facing labels: **Filed** (`registration_date`), **Planned start** (`start_date`), **Planned finish** (`completion_date`). Raw TDLR statuses stay in the DB/API/filters; the UI shows friendly names (`lib/status-labels.ts`): Project Registered → *Filed, plans not reviewed*; Review Complete → *Plans approved*; Inspection Complete → *Final inspection passed (built)*; Project Closed → *Closed out*.
+
+**Stage** (`lib/stage.ts`) is derived from planned dates + status, today in America/Chicago — first match wins: *Built* (Inspection Complete / Project Closed) → *Not started* (planned start after today) → *Past due, likely moving in* (planned finish before today) → *Finishing soon* (planned finish within 90 days) → *Under construction* (planned start on/before today) → *Unknown*. It is computed in SQL, so `GET /api/projects?stage=finishing_soon,past_due` filters, `sort=stage` sorts (pipeline order), and every list response includes `stageCounts` (ignoring the stage filter). Based on planned dates in the state filing, not confirmed site progress.

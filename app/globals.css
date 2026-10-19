@@ -159,3 +159,17 @@ table.report-table{min-width:0;width:100%;table-layout:auto}.report-table th:nth
 .report-other-reasons summary{cursor:pointer}.report-other-reasons ul{margin:8px 0 0;padding-left:18px;color:#4b5b70;font-size:12px;line-height:1.6}
 .report-shell .territory-eyebrow,.report-shell .page-heading p{display:block}
 .report-table td{word-break:normal;overflow-wrap:normal}.report-city{white-space:nowrap}.report-note{overflow-wrap:anywhere}
+/* Project table: class-based column widths (Priority / Distance columns are optional). */
+table.projects-table{min-width:1500px}
+.projects-table th:nth-child(n){width:auto}
+.projects-table th.col-priority{width:6%}.projects-table th.col-project{width:19%}.projects-table th.col-address{width:14%}.projects-table th.col-scope{width:17%}.projects-table th.col-cost{width:8%}.projects-table th.col-distance{width:6%}.projects-table th.col-status{width:9%}.projects-table th.col-stage{width:8%}.projects-table th.col-finish{width:8%}.projects-table th.col-filed{width:7%}.projects-table th.col-arrow{width:2%}
+.projects-table .status-badge{white-space:normal}
+.relative-date{display:block;margin-top:2px;font-size:11px;color:var(--muted);font-weight:500}
+.stage-chip{display:inline-block;border:1px solid;border-radius:999px;font-size:10.5px;font-weight:600;line-height:1.35;padding:3px 8px;white-space:normal;max-width:100%;cursor:help}
+.stage-chip.not_started{background:#f3f1fa;border-color:#d3cbe8;color:#56478a}
+.stage-chip.under_construction{background:#fff6e8;border-color:#e6c48a;color:#8a5a12}
+.stage-chip.finishing_soon{background:#edf7f2;border-color:#9fd0b6;color:#256b4c}
+.stage-chip.past_due{background:#f8eef0;border-color:#e2b7bf;color:#8a2438}
+.stage-chip.built{background:#f1f4f8;border-color:#cbd5e3;color:#3d5370}
+.stage-chip.unknown{background:#f5f5f7;border-color:#dddfe5;color:#737b8c}
+.report-stage{min-width:96px}

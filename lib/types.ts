@@ -1,3 +1,4 @@
+import type { Stage } from './stage';
 export interface ProjectRow {
   estimated_cost: string | number | null;
   scope_of_work: string | null;
@@ -10,14 +11,17 @@ export interface ProjectRow {
   current_status: string | null;
   type_of_work: string | null;
   registration_date: string | null;
+  /** Planned start (TABS estimated start). */
+  start_date?: string | null;
   completion_date: string | null;
   fetched_at: string | null;
+  /** Derived stage (lib/stage.ts), computed server-side. */
+  stage?: Stage;
   /** Miles from selected office (radius mode). */
   distance_mi?: number | null;
   geo_precision?: string | null;
 }
 export interface Project extends ProjectRow {
-  start_date: string | null;
   estimated_cost: string | number | null;
   scope_of_work: string | null;
   owner_name: string | null;
@@ -38,4 +42,6 @@ export interface ProjectListResponse {
   pages: number;
   latestFetch: string | null;
   facets: { cities: string[]; counties: string[]; statuses: string[] };
+  /** Count per derived stage for the current filters (ignoring the stage filter). */
+  stageCounts?: Record<Stage, number>;
 }
