@@ -37,6 +37,8 @@ export interface SmartListDefinition {
   defaultDirection?: 'asc' | 'desc';
   /** Office tab the list opens on (office id from lib/offices.ts). Defaults to All Texas. */
   defaultOffice?: string;
+  /** Default radius (miles) for distance coverage; must be one of RADIUS_OPTIONS. Defaults to 60. */
+  defaultRadius?: number;
   /** Membership comes from lib/smart-list-rankings.ts instead of include/exclude patterns. */
   curated?: boolean;
   minEstimatedCost?: number;
@@ -124,7 +126,7 @@ const DATA_CENTERS: SmartListDefinition = {
 };
 
 /**
- * Bryan priority — every project type within 60 mi of the Bryan office, reviewed
+ * Bryan priority — every project type within 20 mi of the Bryan office, reviewed
  * for office-equipment fit and ranked by timing, fit and size (see
  * lib/rankings/bryan-priority.ts). Other offices: copy this entry + a ranking file.
  */
@@ -132,9 +134,10 @@ const BRYAN_PRIORITY: SmartListDefinition = {
   id: 'bryan-priority',
   title: 'Bryan priority',
   description:
-    'All project types within 60 miles of the Bryan office that are upcoming or still open, reviewed for copier/MFP/managed-print fit and ranked: finishing within 6 months first, then under construction, then not started; document-heavy uses (government, medical, schools, finance, offices) and larger jobs rank higher.',
+    'All project types within 20 miles of the Bryan office that are upcoming or still open, reviewed for copier/MFP/managed-print fit and ranked: finishing within 6 months first, then under construction, then not started; document-heavy uses (government, medical, schools, finance, offices) and larger jobs rank higher.',
   curated: true,
   defaultOffice: 'bryan',
+  defaultRadius: 20,
   defaultSort: 'rank',
   defaultDirection: 'asc',
   include: [],

@@ -22,9 +22,9 @@ export function browserDefaults(listId?: string): ProjectParamState {
     pageSize: 50,
     upcoming: Boolean(list?.upcomingOnlyDefault),
     hidden: false,
-    // Smart lists default to distance coverage (60 mi of selected office / any office when All Texas).
+    // Smart lists default to distance coverage (list.defaultRadius, else 60 mi, of selected office / any office when All Texas).
     scope: list ? 'radius' : 'territory',
-    radius: 60,
+    radius: list?.defaultRadius ?? 60,
   };
 }
 

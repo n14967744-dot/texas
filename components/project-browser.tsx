@@ -45,7 +45,7 @@ function readUrl(defaults: State, listId?: string): State {
   }
   if (p.get('sort') === 'rank' && listId && hasRanking(listId)) result.sort = 'rank';
   if (p.get('scope') === 'radius' || p.get('scope') === 'territory') result.scope = p.get('scope') as State['scope'];
-  const radius = Number(p.get('radius')); if ([30, 60, 100].includes(radius)) result.radius = radius;
+  const radius = Number(p.get('radius')); if ((RADIUS_OPTIONS as readonly number[]).includes(radius)) result.radius = radius;
   if (result.scope !== 'radius' && result.sort === 'distance') { result.sort = defaults.sort; result.direction = defaults.direction; }
   if (p.get('direction') === 'asc') result.direction = 'asc';
   if (p.get('direction') === 'desc') result.direction = 'desc';

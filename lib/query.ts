@@ -1,3 +1,4 @@
+import { RADIUS_OPTIONS } from './radius.ts';
 import { appendSmartListClauses, getSmartList } from './smart-lists.ts';
 import { hiddenProjectNumbers } from './smart-list-review.ts';
 import { hasRanking } from './smart-list-rankings.ts';
@@ -65,7 +66,7 @@ export function parseFilters(params: URLSearchParams): Filters {
   if (sort === 'rank' && !(list && hasRanking(list))) throw new FilterError('Rank sort requires a ranked smart list.');
   const radiusRaw = get('radius') || '60';
   const radius = Number(radiusRaw);
-  if (![30, 60, 100].includes(radius)) throw new FilterError('Invalid radius.');
+  if (!(RADIUS_OPTIONS as readonly number[]).includes(radius)) throw new FilterError('Invalid radius.');
   const dates = { registeredFrom: dateParam(params, 'registeredFrom'), registeredTo: dateParam(params, 'registeredTo'), completionFrom: dateParam(params, 'completionFrom'), completionTo: dateParam(params, 'completionTo') };
   if (dates.registeredFrom && dates.registeredTo && dates.registeredFrom > dates.registeredTo) throw new FilterError('Registration date range is reversed.');
   if (dates.completionFrom && dates.completionTo && dates.completionFrom > dates.completionTo) throw new FilterError('Completion date range is reversed.');
