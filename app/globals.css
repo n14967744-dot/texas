@@ -79,3 +79,18 @@ th:nth-child(1){width:21%}th:nth-child(2){width:18%}th:nth-child(3){width:20%}th
 @media(max-width:1150px){.app-header{gap:12px}.app-header .product-name{display:none}.prospect-filters{width:100%}.prospect-filters .select-control{flex:1}.prospect-filters select{width:100%;max-width:none}}
 @media(max-width:800px){.browser-mode a{font-size:12px;padding:6px 9px}.app-header .freshness{display:none}.prospect-shell .toolbar{flex-wrap:wrap}.prospect-shell .search-field{flex-basis:100%}.prospect-metrics{gap:16px}.prospect-modal-body{max-height:calc(100dvh - 380px)}.linked-project-heading{flex-wrap:wrap}.linked-project-bottom{align-items:flex-start;flex-direction:column}}
 .prospect-dialog[open]{display:flex;flex-direction:column}.prospect-dialog .modal-header,.prospect-dialog .modal-tabs,.prospect-dialog .modal-footer{flex-shrink:0}.prospect-dialog .prospect-modal-body{min-height:0;flex:1}
+
+.smart-list-meta{margin-top:6px;font-size:12px;color:#738198}
+.smart-list-controls{gap:18px;align-items:center}
+.smart-list-controls a{font-size:13px;color:#637187;text-decoration:none;padding:12px 2px 13px;border-bottom:3px solid transparent}
+.smart-list-controls a:hover{color:var(--navy)}
+.smart-list-controls a.active-list,.smart-list-catalog-link{font-weight:600}
+.smart-list-controls a.active-list{color:var(--red);border-bottom-color:var(--red)}
+.smart-lists-index code{font-size:12px;background:#eef2f6;padding:1px 5px;border-radius:3px}
+.smart-list-cards{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.smart-list-card{display:flex;flex-direction:column;gap:10px;min-height:180px;padding:22px 22px 18px;border:1px solid var(--line);border-radius:8px;background:#fff;text-decoration:none;box-shadow:0 1px 2px #12223d06;color:inherit}
+.smart-list-card:hover{border-color:#b8c6d6;box-shadow:0 6px 18px #12223d0d}
+.smart-list-card-kicker{font-size:10px;letter-spacing:1.1px;font-weight:650;color:#738198;text-transform:uppercase}
+.smart-list-card strong{font-size:20px;letter-spacing:-.4px}
+.smart-list-card span:nth-of-type(2){color:var(--muted);font-size:13px;line-height:1.55;flex:1}
+.smart-list-card-cta{font-size:12px;font-weight:650;color:var(--red)}
