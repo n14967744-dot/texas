@@ -10,5 +10,5 @@ export function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: n
   return 2 * EARTH_MI * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
-export const RADIUS_OPTIONS = [30, 60, 100] as const;
+export const RADIUS_OPTIONS = [20, 30, 60, 100] as const;
 export type RadiusMiles = (typeof RADIUS_OPTIONS)[number];
