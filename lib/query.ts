@@ -26,7 +26,7 @@ export function parseFilters(params: URLSearchParams): Filters {
   if (!['all', 'recent', 'soon', 'completed'].includes(view)) throw new FilterError('Invalid saved view.');
   if (!['asc', 'desc'].includes(direction)) throw new FilterError('Invalid sort direction.');
   const page = Number(params.get('page') || 1);
-  const pageSize = Number(params.get('pageSize') || 25);
+  const pageSize = Number(params.get('pageSize') || 50);
   if (!Number.isSafeInteger(page) || page < 1 || page > 100000) throw new FilterError('Invalid page.');
   if (![10, 25, 50].includes(pageSize)) throw new FilterError('Invalid page size.');
   const get = (k: string) => (params.get(k) || '').trim();
