@@ -2,7 +2,9 @@
  * Manual smart-list review overrides, keyed by TABS project_number.
  * Versioned in git — reversible and survives Neon/TABS refreshes.
  * Do not store secrets here. To hide/unhide: edit this file and ship a PR.
+ * Curated lists also contribute hides from their ranking file (lib/smart-list-rankings.ts).
  */
+import { getRankingHidden, rankingHiddenNumbers } from './smart-list-rankings.ts';
 
 export type ReviewDecision = 'hide' | 'review' | 'keep';
 
@@ -65,13 +67,16 @@ for (const entry of SMART_LIST_REVIEW) {
 }
 
 export function getReviewEntry(listId: string, projectNumber: string): SmartListReviewEntry | undefined {
-  return byList.get(listId)?.get(projectNumber);
+  const manual = byList.get(listId)?.get(projectNumber);
+  if (manual) return manual;
+  const ranked = getRankingHidden(listId, projectNumber);
+  return ranked ? { projectNumber, listId, decision: 'hide', reason: ranked.reason } : undefined;
 }
 
 export function hiddenProjectNumbers(listId: string): string[] {
   const map = byList.get(listId);
-  if (!map) return [];
-  return [...map.values()].filter((e) => e.decision === 'hide').map((e) => e.projectNumber);
+  const manual = map ? [...map.values()].filter((e) => e.decision === 'hide').map((e) => e.projectNumber) : [];
+  return [...new Set([...manual, ...rankingHiddenNumbers(listId)])];
 }
 
 export function reviewIndexForList(listId: string): ReadonlyMap<string, SmartListReviewEntry> {

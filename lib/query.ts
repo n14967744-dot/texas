@@ -1,9 +1,10 @@
 import { appendSmartListClauses, getSmartList } from './smart-lists.ts';
 import { hiddenProjectNumbers } from './smart-list-review.ts';
+import { hasRanking } from './smart-list-rankings.ts';
 
 export type SqlQuery = { query: string; params: (string | number)[] };
 export type View = 'all' | 'recent' | 'soon' | 'completed';
-export const SORTS = { estimated_cost: 'estimated_cost', registration_date: 'registration_date', completion_date: 'completion_date', project_name: 'project_name', location_address: 'location_address', current_status: 'current_status', distance: 'distance' } as const;
+export const SORTS = { estimated_cost: 'estimated_cost', registration_date: 'registration_date', completion_date: 'completion_date', project_name: 'project_name', location_address: 'location_address', current_status: 'current_status', distance: 'distance', rank: 'rank' } as const;
 export type CoverageScope = 'territory' | 'radius';
 export const RADIUS_MILES = [30, 60, 100] as const;
 export interface Filters {
@@ -61,6 +62,7 @@ export function parseFilters(params: URLSearchParams): Filters {
   if (!['territory', 'radius'].includes(scopeRaw)) throw new FilterError('Invalid coverage scope.');
   if (scopeRaw === 'radius' && !list) throw new FilterError('Radius coverage is only available on smart lists.');
   if (sort === 'distance' && scopeRaw !== 'radius') throw new FilterError('Distance sort requires radius coverage.');
+  if (sort === 'rank' && !(list && hasRanking(list))) throw new FilterError('Rank sort requires a ranked smart list.');
   const radiusRaw = get('radius') || '60';
   const radius = Number(radiusRaw);
   if (![30, 60, 100].includes(radius)) throw new FilterError('Invalid radius.');

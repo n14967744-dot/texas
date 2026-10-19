@@ -3,6 +3,7 @@ import { getOffice, TERRITORY_COUNTIES } from './offices';
 import { buildWhere, businessToday, FilterError, parseFilters, SORTS, type Filters } from './query';
 import { readQueries } from './db';
 import { projectsWithinRadius, type DistanceHit } from './geo';
+import { rankOf } from './smart-list-rankings';
 import type { ProjectListResponse, ProjectRow } from './types';
 
 const LIST_COLUMNS = 'project_number, project_name, facility_name, location_address, location_city, location_county, current_status, type_of_work, scope_of_work, estimated_cost, registration_date, completion_date, fetched_at';
@@ -81,19 +82,34 @@ export async function loadProjectList(filters: Filters): Promise<ProjectListResp
     };
   }
 
-  if (filters.sort === 'distance' && useRadius) {
+  // Sorts computed in JS (distance from geocodes, curated rank) — fetch matching ids, order, then page.
+  const jsCompare: ((a: string, b: string) => number) | null = filters.sort === 'distance' && useRadius
+    ? (a, b) => {
+      const da = distanceById.get(a)?.distanceMi ?? Number.POSITIVE_INFINITY;
+      const db = distanceById.get(b)?.distanceMi ?? Number.POSITIVE_INFINITY;
+      return filters.direction === 'asc' ? da - db : db - da;
+    }
+    : filters.sort === 'rank' && filters.list
+      ? (a, b) => {
+        const ra = rankOf(filters.list, a);
+        const rb = rankOf(filters.list, b);
+        if (ra === rb) return a.localeCompare(b);
+        // Unranked (hidden) rows always sort after ranked rows.
+        if (!Number.isFinite(ra)) return 1;
+        if (!Number.isFinite(rb)) return -1;
+        return filters.direction === 'asc' ? ra - rb : rb - ra;
+      }
+      : null;
+
+  if (jsCompare) {
     const idResult = await readQueries<{ project_number: string }>([
       { query: `SELECT project_number FROM public.projects WHERE ${where}`, params },
     ]);
     const facetResult = await readQueries<Record<string, unknown>>([
       { query: `SELECT max(fetched_at) AS latest_fetch, array_agg(DISTINCT location_city ORDER BY location_city) FILTER (WHERE location_city IS NOT NULL AND location_city <> '') AS cities, array_agg(DISTINCT location_county ORDER BY location_county) FILTER (WHERE location_county IS NOT NULL AND location_county <> '') AS counties, array_agg(DISTINCT current_status ORDER BY current_status) FILTER (WHERE current_status IS NOT NULL AND current_status <> '') AS statuses FROM public.projects WHERE ${territory.where}`, params: territory.params },
     ]);
-    let ordered = idResult[0].rows.map((row) => row.project_number);
-    ordered.sort((a, b) => {
-      const da = distanceById.get(a)?.distanceMi ?? Number.POSITIVE_INFINITY;
-      const db = distanceById.get(b)?.distanceMi ?? Number.POSITIVE_INFINITY;
-      return filters.direction === 'asc' ? da - db : db - da;
-    });
+    const ordered = idResult[0].rows.map((row) => row.project_number);
+    ordered.sort(jsCompare);
     const total = ordered.length;
     const pages = Math.max(1, Math.ceil(total / filters.pageSize));
     const page = Math.min(filters.page, pages);
@@ -117,7 +133,8 @@ export async function loadProjectList(filters: Filters): Promise<ProjectListResp
       params: pageIds,
     }]);
     const byNum = new Map(rowsResult[0].rows.map((row) => [row.project_number, row]));
-    const projects = attachDistances(pageIds.map((id) => byNum.get(id)!).filter(Boolean), distanceById);
+    const pageRows = pageIds.map((id) => byNum.get(id)!).filter(Boolean);
+    const projects = useRadius ? attachDistances(pageRows, distanceById) : pageRows;
     return {
       projects,
       total,
@@ -133,7 +150,7 @@ export async function loadProjectList(filters: Filters): Promise<ProjectListResp
     };
   }
 
-  const sqlSort = SORTS[filters.sort] === 'distance' ? 'project_number' : SORTS[filters.sort];
+  const sqlSort = SORTS[filters.sort] === 'distance' || SORTS[filters.sort] === 'rank' ? 'project_number' : SORTS[filters.sort];
   const summaries = await readQueries<Record<string, unknown>>([
     { query: `SELECT count(*) AS total FROM public.projects WHERE ${where}`, params },
     { query: `SELECT max(fetched_at) AS latest_fetch, array_agg(DISTINCT location_city ORDER BY location_city) FILTER (WHERE location_city IS NOT NULL AND location_city <> '') AS cities, array_agg(DISTINCT location_county ORDER BY location_county) FILTER (WHERE location_county IS NOT NULL AND location_county <> '') AS counties, array_agg(DISTINCT current_status ORDER BY current_status) FILTER (WHERE current_status IS NOT NULL AND current_status <> '') AS statuses FROM public.projects WHERE ${territory.where}`, params: territory.params },

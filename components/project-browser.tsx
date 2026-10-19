@@ -13,10 +13,11 @@ import { browserDefaults, sortMetaLabel } from '@/lib/browser-defaults';
 import { COMPLETION_PRESETS, completionPresetRange, type CompletionPresetId } from '@/lib/date-presets';
 import { clearProjectCache, readProjectCache, writeProjectCache } from '@/lib/project-cache';
 import { getReviewEntry } from '@/lib/smart-list-review';
+import { getRankingEntry, hasRanking, PRIORITY_TIER_LABELS } from '@/lib/smart-list-rankings';
 import { RADIUS_OPTIONS } from '@/lib/radius';
 
 type View = 'all' | 'recent' | 'soon' | 'completed';
-type Sort = 'estimated_cost' | 'project_name' | 'location_address' | 'current_status' | 'completion_date' | 'registration_date' | 'distance';
+type Sort = 'estimated_cost' | 'project_name' | 'location_address' | 'current_status' | 'completion_date' | 'registration_date' | 'distance' | 'rank';
 type State = ReturnType<typeof browserDefaults> & { office: OfficeId; view: View; sort: Sort };
 
 function baseDefaults(listId?: string): State {
@@ -30,7 +31,7 @@ const views = [
   { id: 'completed', label: 'Recently completed' },
 ] as const;
 
-function readUrl(defaults: State): State {
+function readUrl(defaults: State, listId?: string): State {
   const p = new URLSearchParams(window.location.search);
   const result = { ...defaults };
   if (getOffice(p.get('office') || '')) result.office = p.get('office') as OfficeId;
@@ -42,6 +43,7 @@ function readUrl(defaults: State): State {
   if (['project_name', 'location_address', 'current_status', 'completion_date', 'registration_date', 'estimated_cost', 'distance'].includes(p.get('sort') || '')) {
     result.sort = p.get('sort') as Sort;
   }
+  if (p.get('sort') === 'rank' && listId && hasRanking(listId)) result.sort = 'rank';
   if (p.get('scope') === 'radius' || p.get('scope') === 'territory') result.scope = p.get('scope') as State['scope'];
   const radius = Number(p.get('radius')); if ([30, 60, 100].includes(radius)) result.radius = radius;
   if (result.scope !== 'radius' && result.sort === 'distance') { result.sort = defaults.sort; result.direction = defaults.direction; }
@@ -84,14 +86,19 @@ async function downloadListCsv(query: string, filename: string, listId?: string)
   ];
   const reviewCols = listId ? ['review_decision', 'review_reason', 'cost_note'] : [];
   const distCols = listId && rows.some((r) => r.distance_mi != null) ? ['distance_mi', 'geo_precision'] : [];
-  const header = [...cols, ...reviewCols, ...distCols].join(',');
+  const rankCols = listId && hasRanking(listId) ? ['priority_rank', 'priority_tier', 'priority_note'] : [];
+  const header = [...cols, ...reviewCols, ...distCols, ...rankCols].join(',');
   const lines = [header].concat(rows.map((row) => {
     const base = cols.map((col) => csvEscape(row[col]));
     if (!listId) return base.join(',');
     const entry = getReviewEntry(listId, row.project_number);
     const extra = [csvEscape(entry?.decision || 'keep'), csvEscape(entry?.reason || ''), csvEscape(entry?.costNote || '')];
-    if ('distance_mi' in row && row.distance_mi != null) {
+    if (distCols.length) {
       extra.push(csvEscape(row.distance_mi), csvEscape(row.geo_precision || ''));
+    }
+    if (rankCols.length) {
+      const ranked = getRankingEntry(listId, row.project_number);
+      extra.push(csvEscape(ranked?.rank), csvEscape(ranked ? PRIORITY_TIER_LABELS[ranked.tier] : ''), csvEscape(ranked?.note || ''));
     }
     return [...base, ...extra].join(',');
   }));
@@ -130,6 +137,7 @@ export function ProjectBrowser({
   initialData?: ProjectListResponse | null;
 } = {}) {
   const list = listId ? getSmartList(listId) : undefined;
+  const ranked = Boolean(listId && hasRanking(listId));
   const defaults = useMemo(() => baseDefaults(listId), [listId]);
   const [filters, setFilters] = useState<State>(defaults);
   const [search, setSearch] = useState('');
@@ -149,7 +157,7 @@ export function ProjectBrowser({
 
   useEffect(() => {
     const restore = () => {
-      const f = readUrl(defaults);
+      const f = readUrl(defaults, listId);
       setFilters(f);
       setSearch(f.q);
       setSelected(null);
@@ -158,7 +166,7 @@ export function ProjectBrowser({
     setReady(true);
     window.addEventListener('popstate', restore);
     return () => window.removeEventListener('popstate', restore);
-  }, [defaults]);
+  }, [defaults, listId]);
 
   useEffect(() => {
     if (!ready || search === filters.q) return;
@@ -269,7 +277,7 @@ export function ProjectBrowser({
     sort: key,
     direction: filters.sort === key
       ? (filters.direction === 'asc' ? 'desc' : 'asc')
-      : (key === 'project_name' || key === 'location_address' || key === 'current_status' || key === 'distance' ? 'asc' : 'desc'),
+      : (key === 'project_name' || key === 'location_address' || key === 'current_status' || key === 'distance' || key === 'rank' ? 'asc' : 'desc'),
   });
   const activeCount = [
     filters.coverage === 'outside' ? 'outside' : '',
@@ -287,6 +295,7 @@ export function ProjectBrowser({
   const showSkeleton = loading && !data;
   const busy = loading || refreshing;
   const presetActive = activeCompletionPreset(filters);
+  const columnCount = 8 + Number(Boolean(list && filters.scope === 'radius')) + Number(ranked);
 
   function goPage(page: number) {
     setFilters((f) => ({ ...f, page }));
@@ -520,7 +529,12 @@ export function ProjectBrowser({
             <div className="view-description">Upcoming only: estimated completion on or after today, excluding Project Closed and Inspection Complete. Toggle off to see every match with status so you can filter.</div>
           )}
           {list && filters.hidden && (
-            <div className="view-description">Showing manually hidden filings (office build-outs, guardhouses, incidental IT rooms, etc.). Hidden rows are excluded from the default list and CSV counts; reasons appear on each row.</div>
+            <div className="view-description">{ranked
+              ? 'Showing reviewed bad fits (roads, parks, c-stores, restaurants, speculative shells, storage, tiny scopes, duplicates). Hidden rows are excluded from the default list and CSV counts; hover the Hidden badge for the reason.'
+              : 'Showing manually hidden filings (office build-outs, guardhouses, incidental IT rooms, etc.). Hidden rows are excluded from the default list and CSV counts; reasons appear on each row.'}</div>
+          )}
+          {ranked && filters.sort === 'rank' && !filters.hidden && (
+            <div className="view-description">Ranked for office-equipment sales: timing first (finishing within 6 months, then under construction, then not started), then fit (document-heavy uses rank higher), then size. Tier and a one-line reason appear on each row.</div>
           )}
           {list && filters.scope === 'radius' && (
             <div className="view-description">
@@ -540,9 +554,10 @@ export function ProjectBrowser({
           )}
 
           <div className={`table-region${refreshing ? ' is-refreshing' : ''}`} ref={tableRegion} aria-busy={busy}>
-            <table>
+            <table className={ranked ? 'ranked-table' : undefined}>
               <thead>
                 <tr>
+                  {ranked && header('Priority', 'rank')}
                   {header('Project', 'project_name')}
                   {header('Address', 'location_address')}
                   <th scope="col"><span className="column-label">Scope / description</span></th>
@@ -558,6 +573,7 @@ export function ProjectBrowser({
                 {showSkeleton ? (
                   Array.from({ length: 10 }).map((_, i) => (
                     <tr className="skeleton-row" key={i}>
+                      {ranked && <td><div className="skeleton short" /></td>}
                       <td><div className="skeleton" /><div className="skeleton short" /></td>
                       <td><div className="skeleton" /><div className="skeleton short" /></td>
                       <td><div className="skeleton" /></td>
@@ -570,7 +586,7 @@ export function ProjectBrowser({
                   ))
                 ) : error && !data?.projects.length ? (
                   <tr>
-                    <td colSpan={list && filters.scope === 'radius' ? 9 : 8}>
+                    <td colSpan={columnCount}>
                       <div className="state-message" role="alert">
                         <Icon name="alert" size={30} />
                         <h2>Unable to load projects</h2>
@@ -581,7 +597,7 @@ export function ProjectBrowser({
                   </tr>
                 ) : !data?.projects.length ? (
                   <tr>
-                    <td colSpan={list && filters.scope === 'radius' ? 9 : 8}>
+                    <td colSpan={columnCount}>
                       <div className="state-message">
                         <Icon name="search" size={30} />
                         <h2>No projects found</h2>
@@ -597,6 +613,19 @@ export function ProjectBrowser({
                 ) : (
                   data.projects.map((p) => (
                     <tr key={p.project_number} className="project-row" onClick={() => setSelected(p)}>
+                      {ranked && (() => {
+                        const entry = listId ? getRankingEntry(listId, p.project_number) : undefined;
+                        return (
+                          <td className="priority-cell">
+                            {entry ? (
+                              <>
+                                <span className="priority-rank">#{entry.rank}</span>
+                                <span className={`priority-tier ${entry.tier}`}>{PRIORITY_TIER_LABELS[entry.tier]}</span>
+                              </>
+                            ) : <span className="priority-rank muted">—</span>}
+                          </td>
+                        );
+                      })()}
                       <td className="project-cell">
                         <button className="project-name" onClick={(e) => { e.stopPropagation(); setSelected(p); }}>
                           {p.project_name || p.facility_name || p.project_number}
@@ -612,6 +641,10 @@ export function ProjectBrowser({
                             </span>
                           );
                         })() : null}
+                        {ranked && listId && (() => {
+                          const entry = getRankingEntry(listId, p.project_number);
+                          return entry ? <span className="priority-note">{entry.note}</span> : null;
+                        })()}
                         <span className="secondary-line">{p.type_of_work || 'Work type not listed'}</span>
                       </td>
                       <td className="address-cell">

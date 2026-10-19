@@ -6,7 +6,7 @@ export function browserDefaults(listId?: string): ProjectParamState {
   const list = listId ? getSmartList(listId) : undefined;
   return {
     coverage: 'all',
-    office: list ? 'texas' : 'all',
+    office: list ? (list.defaultOffice ?? 'texas') : 'all',
     view: 'all',
     q: '',
     city: '',
@@ -37,9 +37,11 @@ export function sortMetaLabel(sort: string, direction: 'asc' | 'desc'): string {
     location_address: 'address',
     current_status: 'status',
     distance: 'distance',
+    rank: 'priority rank',
   };
   const name = labels[sort] || sort;
   if (sort === 'estimated_cost') return `sorted by ${name} (${direction === 'desc' ? 'highest first' : 'lowest first'})`;
+  if (sort === 'rank') return `sorted by ${name} (${direction === 'asc' ? 'best first' : 'lowest first'})`;
   if (sort === 'distance') return `sorted by ${name} (${direction === 'asc' ? 'nearest first' : 'farthest first'})`;
   if (sort.endsWith('_date')) return `sorted by ${name} (${direction === 'desc' ? 'newest first' : 'oldest first'})`;
   return `sorted by ${name} (${direction === 'asc' ? 'A→Z' : 'Z→A'})`;

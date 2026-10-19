@@ -10,7 +10,12 @@
  * Include/exclude patterns are case-insensitive and must work in both JavaScript
  * RegExp and PostgreSQL POSIX `~*` (prefer `[\\s\\-_]*`, `(?:...)`, avoid `\\b`).
  * A project matches when ANY include hits a searched field and NO exclude hits.
+ *
+ * Curated lists (`curated: true`) skip keyword matching: membership, rank, tier
+ * and notes come from a ranking file registered in lib/smart-list-rankings.ts.
  */
+
+import { curatedProjectNumbers } from './smart-list-rankings.ts';
 
 export type SmartListField = 'project_name' | 'facility_name' | 'scope_of_work' | 'type_of_work';
 
@@ -26,10 +31,14 @@ export interface SmartListDefinition {
   fields?: readonly SmartListField[];
   /** When true, the list page starts with the upcoming-only toggle on. */
   upcomingOnlyDefault?: boolean;
-  /** Initial sort column (must be a /api/projects sort key). */
-  defaultSort?: 'estimated_cost' | 'registration_date' | 'completion_date' | 'project_name' | 'location_address' | 'current_status';
+  /** Initial sort column (must be a /api/projects sort key; `rank` needs a curated list). */
+  defaultSort?: 'estimated_cost' | 'registration_date' | 'completion_date' | 'project_name' | 'location_address' | 'current_status' | 'rank';
   /** Initial sort direction. */
   defaultDirection?: 'asc' | 'desc';
+  /** Office tab the list opens on (office id from lib/offices.ts). Defaults to All Texas. */
+  defaultOffice?: string;
+  /** Membership comes from lib/smart-list-rankings.ts instead of include/exclude patterns. */
+  curated?: boolean;
   minEstimatedCost?: number;
   statuses?: readonly string[];
   typesOfWork?: readonly string[];
@@ -114,8 +123,26 @@ const DATA_CENTERS: SmartListDefinition = {
   ],
 };
 
+/**
+ * Bryan priority — every project type within 60 mi of the Bryan office, reviewed
+ * for office-equipment fit and ranked by timing, fit and size (see
+ * lib/rankings/bryan-priority.ts). Other offices: copy this entry + a ranking file.
+ */
+const BRYAN_PRIORITY: SmartListDefinition = {
+  id: 'bryan-priority',
+  title: 'Bryan priority',
+  description:
+    'All project types within 60 miles of the Bryan office that are upcoming or still open, reviewed for copier/MFP/managed-print fit and ranked: finishing within 6 months first, then under construction, then not started; document-heavy uses (government, medical, schools, finance, offices) and larger jobs rank higher.',
+  curated: true,
+  defaultOffice: 'bryan',
+  defaultSort: 'rank',
+  defaultDirection: 'asc',
+  include: [],
+  exclude: [],
+};
+
 /** Append new list definitions here. */
-export const SMART_LISTS: readonly SmartListDefinition[] = [DATA_CENTERS];
+export const SMART_LISTS: readonly SmartListDefinition[] = [DATA_CENTERS, BRYAN_PRIORITY];
 
 export function getSmartList(id: string): SmartListDefinition | undefined {
   return SMART_LISTS.find((list) => list.id === id);
@@ -134,7 +161,8 @@ function compile(patterns: readonly string[]): RegExp[] {
 }
 
 /** Pure matcher used by unit tests and offline sanity checks. */
-export function matchesSmartList(row: SmartListProjectFields, list: SmartListDefinition): boolean {
+export function matchesSmartList(row: SmartListProjectFields & { project_number?: string }, list: SmartListDefinition): boolean {
+  if (list.curated) return Boolean(row.project_number && curatedProjectNumbers(list.id).includes(row.project_number));
   const fields = smartListFields(list);
   const text = listSearchText(row, fields);
   if (compile(list.exclude).some((re) => re.test(text))) return false;
@@ -166,6 +194,11 @@ export function appendSmartListClauses(
   bind: (value: string | number) => string,
   clauses: string[],
 ): void {
+  if (list.curated) {
+    const members = curatedProjectNumbers(list.id);
+    clauses.push(members.length ? `project_number IN (${members.map((n) => bind(n)).join(',')})` : 'FALSE');
+    return;
+  }
   const fields = smartListFields(list);
   const fieldMatch = (param: string) =>
     `(${fields.map((field) => `COALESCE(${field}, '') ~* ${param}`).join(' OR ')})`;
