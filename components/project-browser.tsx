@@ -22,7 +22,7 @@ function baseDefaults(listId?: string): State {
     completionFrom: '', completionTo: '', registeredFrom: '', registeredTo: '',
     sort: list ? 'completion_date' : 'registration_date',
     direction: list ? 'asc' : 'desc',
-    page: 1, pageSize: 25,
+    page: 1, pageSize: 50,
     upcoming: Boolean(list?.upcomingOnlyDefault),
   };
 }

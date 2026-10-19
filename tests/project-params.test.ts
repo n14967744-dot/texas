@@ -30,3 +30,12 @@ test('main projects browser still omits API-default office=all', () => {
   const query = buildProjectSearchParams({ ...API_PROJECT_PARAM_DEFAULTS });
   assert.equal(query, '');
 });
+
+test('pageSize defaults to 50 and is omitted from the query when unchanged', () => {
+  const query = buildProjectSearchParams({ ...API_PROJECT_PARAM_DEFAULTS, office: 'texas' }, { listId: 'data-centers' });
+  const params = new URLSearchParams(query);
+  assert.equal(API_PROJECT_PARAM_DEFAULTS.pageSize, 50);
+  assert.equal(params.get('pageSize'), null);
+  const custom = buildProjectSearchParams({ ...API_PROJECT_PARAM_DEFAULTS, office: 'texas', pageSize: 25 }, { listId: 'data-centers' });
+  assert.equal(new URLSearchParams(custom).get('pageSize'), '25');
+});

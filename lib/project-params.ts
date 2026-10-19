@@ -41,7 +41,7 @@ export const API_PROJECT_PARAM_DEFAULTS: ProjectParamState = {
   sort: 'registration_date',
   direction: 'desc',
   page: 1,
-  pageSize: 25,
+  pageSize: 50,
   upcoming: false,
 };
 
