@@ -39,3 +39,18 @@ test('pageSize defaults to 50 and is omitted from the query when unchanged', () 
   const custom = buildProjectSearchParams({ ...API_PROJECT_PARAM_DEFAULTS, office: 'texas', pageSize: 25 }, { listId: 'data-centers' });
   assert.equal(new URLSearchParams(custom).get('pageSize'), '25');
 });
+
+test('smart list estimated_cost desc default is sent (not dropped as API default direction)', () => {
+  const query = buildProjectSearchParams({
+    ...API_PROJECT_PARAM_DEFAULTS,
+    office: 'texas',
+    sort: 'estimated_cost',
+    direction: 'desc',
+    upcoming: true,
+  }, { listId: 'data-centers' });
+  const params = new URLSearchParams(query);
+  assert.equal(params.get('sort'), 'estimated_cost');
+  assert.equal(params.get('direction'), 'desc');
+  assert.equal(params.get('office'), 'texas');
+  assert.equal(params.get('list'), 'data-centers');
+});
