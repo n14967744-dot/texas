@@ -141,3 +141,7 @@ python scripts/sync_tabs.py --since 2026-09-28 --refresh-limit 0
 ```
 
 `--dry-run` never creates tracking tables or writes projects. `--max-projects` is for testing and never advances the discovery watermark. Failed records leave the job failed while preserving successful upserts; retrying is safe. The updater does not load `.env.local` automatically.
+
+### Priority reports (`/reports/<list-id>`)
+
+Any ranking in `lib/rankings/` that includes a `report` block (office, radius, scanned/reviewed counts, focus cities, method and assumptions in plain English) gets a read-only report at `/reports/<list-id>`, listed on `/reports` and linked from the list page ("View priority report →"). The report shows the Hot tier first, Hot projects in the focus cities, collapsible Warm/Pipeline sections, hidden-by-reason counts and the scoring method. Project details (name, city, cost, completion) are read live from the database; project links open the row's details in the sortable list (`?open=<TABS#>`).

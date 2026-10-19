@@ -24,6 +24,31 @@ import type { SmartListRanking } from '../smart-list-rankings.ts';
 export const BRYAN_PRIORITY_RANKING: SmartListRanking = {
   listId: 'bryan-priority',
   generatedAt: '2026-10-19',
+  report: {
+    title: 'Bryan priority report',
+    officeId: 'bryan',
+    radiusMi: 60,
+    scannedCount: 19373,
+    reviewedCount: 700,
+    focusCities: ['Bryan', 'College Station'],
+    method: [
+      'Every TABS filing in 30 counties around Bryan was pulled from the project database and placed on a map (Census address match, or the city center when the address did not match).',
+      'Kept filings within 60 straight-line miles of the Bryan office whose estimated completion is today or later, plus filings whose estimated completion passed in the last 90 days but are still not closed or inspected (likely moving in now).',
+      'Each filing was reviewed by hand. Roads, sidewalks, utilities, parks, parking, c-stores and fuel, restaurants, salons and gyms, speculative shells, pure storage, jobs under $100k and duplicate filings were hidden.',
+      'Each kept project is scored out of 10: timing counts 50%, fit 30%, size 20%.',
+      'Timing: finishing within 3 months scores highest, then 3–6 months, then past its estimated date but not closed, then under construction (start date already passed), then not started.',
+      'Fit: document-heavy buyers score highest (government offices, medical, schools and universities, banks and insurance, professional offices); churches, apartments with leasing offices, hotels and senior living are in the middle; retail back offices, industrial and dealerships are lowest.',
+      'Size: estimated cost on a log scale ($100k low, $100M+ top), blended with square footage when the filing lists it.',
+      'Hot = finishing within 6 months (or just past) with strong fit and at least $250k. Warm = good timing with reasonable fit, or under construction with strong fit, or large strong-fit jobs. Pipeline = everything else worth tracking.',
+    ],
+    assumptions: [
+      'This is a snapshot from Oct 19, 2026. New TABS filings are not added until the ranking file is regenerated; costs, statuses and dates below are live from the database.',
+      'Distance is straight-line from the Bryan city center, not driving distance. A few unincorporated Hockley/Cypress filings without a matched address may be missing.',
+      '“Under construction” means the TABS estimated start date has passed; actual site progress is not confirmed.',
+      'Fit is a sales judgment based on the building’s use as described in the filing. The property owner listed in TABS may not be the business that buys equipment.',
+      'Why notes use only TABS fields (dates, scope, square footage, cost).',
+    ],
+  },
   ranked: [
     { projectNumber: "TABS2025020666", rank: 1, tier: "hot", note: "Finishes Dec 2026 (~2 mo); new junior high school; school = high print volume; $108.6M." },
     { projectNumber: "TABS2025017664", rank: 2, tier: "hot", note: "Finishes Nov 2026 (~1 mo); new 3-story 52,000 SF outpatient clinic w/ imaging + admin; patient records/forms = heavy print; $24.0M." },

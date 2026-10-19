@@ -13,7 +13,7 @@ import { browserDefaults, sortMetaLabel } from '@/lib/browser-defaults';
 import { COMPLETION_PRESETS, completionPresetRange, type CompletionPresetId } from '@/lib/date-presets';
 import { clearProjectCache, readProjectCache, writeProjectCache } from '@/lib/project-cache';
 import { getReviewEntry } from '@/lib/smart-list-review';
-import { getRankingEntry, hasRanking, PRIORITY_TIER_LABELS } from '@/lib/smart-list-rankings';
+import { getRanking, getRankingEntry, hasRanking, PRIORITY_TIER_LABELS } from '@/lib/smart-list-rankings';
 import { RADIUS_OPTIONS } from '@/lib/radius';
 
 type View = 'all' | 'recent' | 'soon' | 'completed';
@@ -138,6 +138,7 @@ export function ProjectBrowser({
 } = {}) {
   const list = listId ? getSmartList(listId) : undefined;
   const ranked = Boolean(listId && hasRanking(listId));
+  const hasReport = Boolean(listId && getRanking(listId)?.report);
   const defaults = useMemo(() => baseDefaults(listId), [listId]);
   const [filters, setFilters] = useState<State>(defaults);
   const [search, setSearch] = useState('');
@@ -154,9 +155,12 @@ export function ProjectBrowser({
   const [exporting, setExporting] = useState(false);
   const tableRegion = useRef<HTMLDivElement>(null);
   const seededRef = useRef(false);
+  // `?open=<TABS#>` (used by report links) opens that project's details once its row loads.
+  const pendingOpen = useRef<string | null>(null);
 
   useEffect(() => {
     const restore = () => {
+      pendingOpen.current = new URLSearchParams(window.location.search).get('open');
       const f = readUrl(defaults, listId);
       setFilters(f);
       setSearch(f.q);
@@ -237,6 +241,16 @@ export function ProjectBrowser({
     // intentionally omit `data` — keep previous rows while refetching
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, ready, retry]);
+
+  useEffect(() => {
+    const target = pendingOpen.current;
+    if (!target || !data) return;
+    const row = data.projects.find((p) => p.project_number === target);
+    if (row) {
+      pendingOpen.current = null;
+      setSelected(row);
+    }
+  }, [data]);
 
   const office = getOffice(filters.office)!;
   const counties = office.counties || data?.facets.counties || [];
@@ -370,6 +384,7 @@ export function ProjectBrowser({
           </div>
           <div className="heading-actions">
             <span className="territory-label"><Icon name="pin" size={15} />{coverageLabel}</span>
+            {hasReport && <a className="report-link" href={`/reports/${listId}`}>View priority report →</a>}
             {list && (
               <button className="button" disabled={busy || exporting || !!error || !data?.total} onClick={exportCsv} aria-label="Download CSV of this smart list">
                 {exporting ? 'Exporting…' : 'Export CSV'}
