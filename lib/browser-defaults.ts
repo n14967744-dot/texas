@@ -21,6 +21,7 @@ export function browserDefaults(listId?: string): ProjectParamState {
     page: 1,
     pageSize: 50,
     upcoming: Boolean(list?.upcomingOnlyDefault),
+    hidden: false,
   };
 }
 

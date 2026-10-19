@@ -111,6 +111,7 @@ th:nth-child(1){width:21%}th:nth-child(2){width:18%}th:nth-child(3){width:20%}th
   .heading-actions{display:none}
 }
 
+.review-badges{display:inline-flex;flex-wrap:wrap;gap:5px;margin-top:5px}.review-badge{display:inline-block;font-size:10px;font-weight:650;letter-spacing:.2px;border-radius:3px;padding:2px 6px;border:1px solid}.review-badge.hide{background:#f8eef0;border-color:#e2b7bf;color:#8a2438}.review-badge.review{background:#fff6e8;border-color:#e6c48a;color:#8a5a12}.review-badge.cost{background:#eef3f8;border-color:#b7c6d6;color:#3a5270}
 .smart-list-meta{margin-top:6px;font-size:12px;color:#738198}
 .smart-list-controls{gap:18px;align-items:center}
 .smart-list-controls a{font-size:13px;color:#637187;text-decoration:none;padding:12px 2px 13px;border-bottom:3px solid transparent}

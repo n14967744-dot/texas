@@ -23,6 +23,7 @@ export type ProjectParamState = {
   page: number;
   pageSize: number;
   upcoming: boolean;
+  hidden: boolean;
 };
 
 /** Mirrors parseFilters() defaults in lib/query.ts when a key is absent. */
@@ -43,6 +44,7 @@ export const API_PROJECT_PARAM_DEFAULTS: ProjectParamState = {
   page: 1,
   pageSize: 50,
   upcoming: false,
+  hidden: false,
 };
 
 export function buildProjectSearchParams(
@@ -52,7 +54,7 @@ export function buildProjectSearchParams(
   const p = new URLSearchParams();
   const defaults = API_PROJECT_PARAM_DEFAULTS;
   (Object.keys(defaults) as (keyof ProjectParamState)[]).forEach((key) => {
-    if (key === 'upcoming') return;
+    if (key === 'upcoming' || key === 'hidden') return;
     const value = filters[key];
     if (value === '' || value === defaults[key]) return;
     p.set(key, String(value));
@@ -60,6 +62,7 @@ export function buildProjectSearchParams(
   if (options.listId) {
     p.set('list', options.listId);
     p.set('upcoming', filters.upcoming ? '1' : '0');
+    if (filters.hidden) p.set('hidden', '1');
   } else if (filters.upcoming) {
     p.set('upcoming', '1');
   }

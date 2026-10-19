@@ -107,6 +107,10 @@ const DATA_CENTERS: SmartListDefinition = {
     String.raw`Switchyards`,
     String.raw`Executive\s+Office\s+Suite`,
     String.raw`Break\s+Room\s+Updates`,
+    // Future-safe phrases (do not overlap current review-hide rows — those stay
+    // keyword-visible so Show hidden can surface them with a badge)
+    String.raw`server\s+assembly\s+factory`,
+    String.raw`coworking\s+switchyard`,
   ],
 };
 
