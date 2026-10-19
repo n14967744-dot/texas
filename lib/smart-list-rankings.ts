@@ -36,9 +36,26 @@ export type SmartListRankingHidden = {
   reason: string;
 };
 
+/** Plain-English context for the read-only report page (/reports/<listId>). */
+export type SmartListRankingReport = {
+  title: string;
+  /** Office id from lib/offices.ts the ranking was built around. */
+  officeId: string;
+  radiusMi: number;
+  /** Filings scanned before the radius/open filters (county pulls). */
+  scannedCount: number;
+  /** Filings within the radius and still open — everything that was reviewed. */
+  reviewedCount: number;
+  /** Cities called out as "in town" for the office. */
+  focusCities: readonly string[];
+  method: readonly string[];
+  assumptions: readonly string[];
+};
+
 export type SmartListRanking = {
   listId: string;
   generatedAt: string;
+  report?: SmartListRankingReport;
   ranked: readonly SmartListRankingEntry[];
   hidden: readonly SmartListRankingHidden[];
 };
@@ -56,6 +73,21 @@ for (const ranking of RANKINGS) {
 
 export function getRanking(listId: string): SmartListRanking | undefined {
   return byList.get(listId)?.ranking;
+}
+
+/** Rankings that have report metadata, for /reports. */
+export function reportRankings(): SmartListRanking[] {
+  return RANKINGS.filter((ranking) => ranking.report);
+}
+
+/** Group hidden reasons for summaries; duplicate notes collapse into one bucket. */
+export function hiddenReasonCounts(listId: string): { reason: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const entry of getRanking(listId)?.hidden ?? []) {
+    const reason = entry.reason.startsWith('Duplicate') ? 'Duplicate of another filing in the list' : entry.reason;
+    counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  }
+  return [...counts].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
 }
 
 export function hasRanking(listId: string): boolean {

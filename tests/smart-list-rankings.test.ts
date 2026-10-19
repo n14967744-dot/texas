@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RANKINGS, getRanking, getRankingEntry, curatedProjectNumbers, rankOf } from '../lib/smart-list-rankings.ts';
+import { RANKINGS, getRanking, getRankingEntry, curatedProjectNumbers, rankOf, reportRankings, hiddenReasonCounts } from '../lib/smart-list-rankings.ts';
 import { getSmartList, matchesSmartList } from '../lib/smart-lists.ts';
 import { getReviewEntry, hiddenProjectNumbers } from '../lib/smart-list-review.ts';
 import { buildWhere, parseFilters } from '../lib/query.ts';
@@ -84,4 +84,22 @@ test('bryan-priority defaults: Bryan office, 60 mi radius, rank ascending', () =
   assert.equal(params.get('list'), 'bryan-priority');
   // data-centers keeps its All Texas default
   assert.equal(browserDefaults('data-centers').office, 'texas');
+});
+
+test('report metadata is consistent with the ranking snapshot', () => {
+  const ranking = getRanking('bryan-priority')!;
+  const report = ranking.report!;
+  assert.ok(report, 'bryan-priority has report metadata');
+  assert.equal(report.reviewedCount, ranking.ranked.length + ranking.hidden.length);
+  assert.ok(report.method.length > 0 && report.assumptions.length > 0);
+  assert.ok(reportRankings().some((r) => r.listId === 'bryan-priority'));
+});
+
+test('hidden reasons are grouped, duplicates collapse, totals match', () => {
+  const ranking = getRanking('bryan-priority')!;
+  const groups = hiddenReasonCounts('bryan-priority');
+  assert.equal(groups.reduce((sum, g) => sum + g.count, 0), ranking.hidden.length);
+  assert.equal(groups.filter((g) => g.reason.startsWith('Duplicate')).length <= 1, true);
+  for (let i = 1; i < groups.length; i++) assert.ok(groups[i - 1].count >= groups[i].count);
+  assert.deepEqual(hiddenReasonCounts('nope'), []);
 });
