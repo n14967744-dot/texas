@@ -24,6 +24,8 @@ export type ProjectParamState = {
   pageSize: number;
   upcoming: boolean;
   hidden: boolean;
+  scope: string;
+  radius: number;
 };
 
 /** Mirrors parseFilters() defaults in lib/query.ts when a key is absent. */
@@ -45,6 +47,8 @@ export const API_PROJECT_PARAM_DEFAULTS: ProjectParamState = {
   pageSize: 50,
   upcoming: false,
   hidden: false,
+  scope: 'territory',
+  radius: 60,
 };
 
 export function buildProjectSearchParams(
@@ -54,7 +58,7 @@ export function buildProjectSearchParams(
   const p = new URLSearchParams();
   const defaults = API_PROJECT_PARAM_DEFAULTS;
   (Object.keys(defaults) as (keyof ProjectParamState)[]).forEach((key) => {
-    if (key === 'upcoming' || key === 'hidden') return;
+    if (key === 'upcoming' || key === 'hidden' || key === 'scope' || key === 'radius') return;
     const value = filters[key];
     if (value === '' || value === defaults[key]) return;
     p.set(key, String(value));
@@ -63,6 +67,8 @@ export function buildProjectSearchParams(
     p.set('list', options.listId);
     p.set('upcoming', filters.upcoming ? '1' : '0');
     if (filters.hidden) p.set('hidden', '1');
+    if (filters.scope && filters.scope !== 'territory') p.set('scope', filters.scope);
+    if (filters.scope === 'radius') p.set('radius', String(filters.radius || 60));
   } else if (filters.upcoming) {
     p.set('upcoming', '1');
   }

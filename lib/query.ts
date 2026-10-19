@@ -3,7 +3,9 @@ import { hiddenProjectNumbers } from './smart-list-review.ts';
 
 export type SqlQuery = { query: string; params: (string | number)[] };
 export type View = 'all' | 'recent' | 'soon' | 'completed';
-export const SORTS = { estimated_cost: 'estimated_cost', registration_date: 'registration_date', completion_date: 'completion_date', project_name: 'project_name', location_address: 'location_address', current_status: 'current_status' } as const;
+export const SORTS = { estimated_cost: 'estimated_cost', registration_date: 'registration_date', completion_date: 'completion_date', project_name: 'project_name', location_address: 'location_address', current_status: 'current_status', distance: 'distance' } as const;
+export type CoverageScope = 'territory' | 'radius';
+export const RADIUS_MILES = [30, 60, 100] as const;
 export interface Filters {
   coverage: 'all' | 'outside'; office: string; q: string; city: string; county: string; status: string;
   registeredFrom: string; registeredTo: string; completionFrom: string; completionTo: string;
@@ -14,6 +16,10 @@ export interface Filters {
   upcoming: boolean;
   /** When true on a smart list, include manually hidden projects. */
   hidden: boolean;
+  /** territory = office counties; radius = within radius miles of office (smart lists). */
+  scope: CoverageScope;
+  /** Miles from office when scope=radius. */
+  radius: number;
 }
 export class FilterError extends Error {}
 function dateParam(params: URLSearchParams, key: string) {
@@ -51,10 +57,17 @@ export function parseFilters(params: URLSearchParams): Filters {
   if (hiddenRaw && !['1', 'true', '0', 'false'].includes(hiddenRaw)) throw new FilterError('Invalid hidden filter.');
   const hidden = hiddenRaw === '1' || hiddenRaw === 'true';
   if (hidden && !list) throw new FilterError('Show hidden is only available on smart lists.');
+  const scopeRaw = get('scope') || 'territory';
+  if (!['territory', 'radius'].includes(scopeRaw)) throw new FilterError('Invalid coverage scope.');
+  if (scopeRaw === 'radius' && !list) throw new FilterError('Radius coverage is only available on smart lists.');
+  if (sort === 'distance' && scopeRaw !== 'radius') throw new FilterError('Distance sort requires radius coverage.');
+  const radiusRaw = get('radius') || '60';
+  const radius = Number(radiusRaw);
+  if (![30, 60, 100].includes(radius)) throw new FilterError('Invalid radius.');
   const dates = { registeredFrom: dateParam(params, 'registeredFrom'), registeredTo: dateParam(params, 'registeredTo'), completionFrom: dateParam(params, 'completionFrom'), completionTo: dateParam(params, 'completionTo') };
   if (dates.registeredFrom && dates.registeredTo && dates.registeredFrom > dates.registeredTo) throw new FilterError('Registration date range is reversed.');
   if (dates.completionFrom && dates.completionTo && dates.completionFrom > dates.completionTo) throw new FilterError('Completion date range is reversed.');
-  return { coverage: coverage as 'all' | 'outside', office: get('office') || 'all', q, city: get('city'), county: get('county'), status: get('status'), ...dates, view: view as View, sort: sort as keyof typeof SORTS, direction: direction as 'asc' | 'desc', page, pageSize, list, upcoming, hidden };
+  return { coverage: coverage as 'all' | 'outside', office: get('office') || 'all', q, city: get('city'), county: get('county'), status: get('status'), ...dates, view: view as View, sort: sort as keyof typeof SORTS, direction: direction as 'asc' | 'desc', page, pageSize, list, upcoming, hidden, scope: scopeRaw as CoverageScope, radius };
 }
 export function businessToday(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);

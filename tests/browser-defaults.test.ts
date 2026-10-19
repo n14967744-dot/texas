@@ -17,6 +17,8 @@ test('data-centers defaults to estimated_cost desc and serializes for the API', 
   assert.equal(params.get('office'), 'texas');
   assert.equal(params.get('list'), 'data-centers');
   assert.equal(params.get('upcoming'), '1');
+  assert.equal(params.get('scope'), 'radius');
+  assert.equal(params.get('radius'), '60');
   const filters = parseFilters(params);
   assert.equal(filters.sort, 'estimated_cost');
   assert.equal(filters.direction, 'desc');

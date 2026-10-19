@@ -60,6 +60,11 @@ Curated project lists live in `lib/smart-lists.ts`. Data centers is the first li
 
 Include/exclude patterns must work in both JavaScript and PostgreSQL `~*` (prefer `[\s\-_]*` and `(?:...)`; avoid `\b`). Matching is case-insensitive against project name, facility name, and scope by default.
 
+
+### Radius coverage (smart lists)
+
+On smart list pages, **Coverage** can be **Territory counties** (legacy office-county filter) or **Within N mi** of the selected office tab (30 / 60 / 100 miles, default 60). All Texas / All CTWP territories uses distance to the **nearest** office. Office coordinates are Census 2024 city centroids (no street addresses in-repo). Project coordinates are Census Geocoder address matches when available, else Gazetteer city/county centroids (`data/dc-geocodes.json`).
+
 ## Smart list review (hide / unhide)
 
 Manual overrides live in `lib/smart-list-review.ts`, keyed by TABS `project_number` and list id. They are versioned in git (reversible) and do **not** change the Neon database.
