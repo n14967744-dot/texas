@@ -44,6 +44,22 @@ Vercel can use the default `npm run build` command. No Sites or Cloudflare setup
 
 Notes, shortlists, login, outreach, and AI scoring are intentionally deferred. The web app only reads the database; the separate updater below writes verified source records. There are no fake/demo records.
 
+
+## Smart Lists
+
+Curated project lists live in `lib/smart-lists.ts`. Data centers is the first list; more can be added the same way.
+
+- Catalog: `/lists`
+- List page: `/lists/<id>` (example: `/lists/data-centers`)
+- API: `GET /api/projects?list=<id>` — works with the existing office / coverage / city / status / date filters. Add `upcoming=1` for estimated completion on or after today, excluding Project Closed and Inspection Complete.
+
+### Add a list
+
+1. Append one object to `SMART_LISTS` in `lib/smart-lists.ts` (`id`, `title`, `description`, `include` / `exclude` regexes, optional fields and filters).
+2. Open `/lists/<id>`. The catalog, nav, and `?list=` API param pick it up automatically.
+
+Include/exclude patterns must work in both JavaScript and PostgreSQL `~*` (prefer `[\s\-_]*` and `(?:...)`; avoid `\b`). Matching is case-insensitive against project name, facility name, and scope by default.
+
 ## Checks
 
 ```sh
@@ -52,7 +68,7 @@ npm run typecheck
 npm run build
 ```
 
-Tests cover query safety, calendar filters, validation, and source-link safety. APIs: `GET /api/projects` and `GET /api/projects/:projectNumber`.
+Tests cover query safety, calendar filters, smart-list matching, validation, and source-link safety. APIs: `GET /api/projects` (optional `list` / `upcoming`), `GET /api/projects/:projectNumber`.
 
 ## Prospects and coverage
 

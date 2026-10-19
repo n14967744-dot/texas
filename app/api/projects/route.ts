@@ -14,7 +14,9 @@ export async function GET(request: NextRequest) {
     if (filters.county && office.counties !== null && !(office.counties as readonly string[]).includes(filters.county)) throw new FilterError('County is outside this office territory.');
     if (filters.coverage === 'outside' && filters.county && (TERRITORY_COUNTIES as readonly string[]).includes(filters.county)) throw new FilterError('County is inside a CTWP territory.');
     const { where, params } = buildWhere(filters, office.counties, businessToday(), TERRITORY_COUNTIES);
-    const territory = buildWhere(parseFilters(new URLSearchParams({ office: filters.office, coverage: filters.coverage })), office.counties, businessToday(), TERRITORY_COUNTIES);
+    const facetSearch = new URLSearchParams({ office: filters.office, coverage: filters.coverage });
+    if (filters.list) facetSearch.set('list', filters.list);
+    const territory = buildWhere(parseFilters(facetSearch), office.counties, businessToday(), TERRITORY_COUNTIES);
     const summaries = await readQueries<Record<string, unknown>>([
       { query: `SELECT count(*) AS total FROM public.projects WHERE ${where}`, params },
       { query: `SELECT max(fetched_at) AS latest_fetch, array_agg(DISTINCT location_city ORDER BY location_city) FILTER (WHERE location_city IS NOT NULL AND location_city <> '') AS cities, array_agg(DISTINCT location_county ORDER BY location_county) FILTER (WHERE location_county IS NOT NULL AND location_county <> '') AS counties, array_agg(DISTINCT current_status ORDER BY current_status) FILTER (WHERE current_status IS NOT NULL AND current_status <> '') AS statuses FROM public.projects WHERE ${territory.where}`, params: territory.params },

@@ -1,3 +1,5 @@
+import { appendSmartListClauses, getSmartList } from './smart-lists.ts';
+
 export type SqlQuery = { query: string; params: (string | number)[] };
 export type View = 'all' | 'recent' | 'soon' | 'completed';
 export const SORTS = { estimated_cost: 'estimated_cost', registration_date: 'registration_date', completion_date: 'completion_date', project_name: 'project_name', location_address: 'location_address', current_status: 'current_status' } as const;
@@ -5,6 +7,10 @@ export interface Filters {
   coverage: 'all' | 'outside'; office: string; q: string; city: string; county: string; status: string;
   registeredFrom: string; registeredTo: string; completionFrom: string; completionTo: string;
   view: View; sort: keyof typeof SORTS; direction: 'asc' | 'desc'; page: number; pageSize: number;
+  /** Smart list slug from lib/smart-lists.ts, or empty when browsing all projects. */
+  list: string;
+  /** Est. completion on/after today and not Closed / Inspection Complete. */
+  upcoming: boolean;
 }
 export class FilterError extends Error {}
 function dateParam(params: URLSearchParams, key: string) {
@@ -30,10 +36,18 @@ export function parseFilters(params: URLSearchParams): Filters {
   const q = get('q');
   if (q.length > 200) throw new FilterError('Search must be 200 characters or fewer.');
   for (const k of ['city', 'county', 'status']) if (get(k).length > 100) throw new FilterError('Filter value is too long.');
+  const list = get('list');
+  if (list) {
+    if (list.length > 64 || !/^[a-z0-9-]+$/.test(list)) throw new FilterError('Invalid smart list.');
+    if (!getSmartList(list)) throw new FilterError('Unknown smart list.');
+  }
+  const upcomingRaw = get('upcoming');
+  if (upcomingRaw && !['1', 'true', '0', 'false'].includes(upcomingRaw)) throw new FilterError('Invalid upcoming filter.');
+  const upcoming = upcomingRaw === '1' || upcomingRaw === 'true';
   const dates = { registeredFrom: dateParam(params, 'registeredFrom'), registeredTo: dateParam(params, 'registeredTo'), completionFrom: dateParam(params, 'completionFrom'), completionTo: dateParam(params, 'completionTo') };
   if (dates.registeredFrom && dates.registeredTo && dates.registeredFrom > dates.registeredTo) throw new FilterError('Registration date range is reversed.');
   if (dates.completionFrom && dates.completionTo && dates.completionFrom > dates.completionTo) throw new FilterError('Completion date range is reversed.');
-  return { coverage: coverage as 'all' | 'outside', office: get('office') || 'all', q, city: get('city'), county: get('county'), status: get('status'), ...dates, view: view as View, sort: sort as keyof typeof SORTS, direction: direction as 'asc' | 'desc', page, pageSize };
+  return { coverage: coverage as 'all' | 'outside', office: get('office') || 'all', q, city: get('city'), county: get('county'), status: get('status'), ...dates, view: view as View, sort: sort as keyof typeof SORTS, direction: direction as 'asc' | 'desc', page, pageSize, list, upcoming };
 }
 export function businessToday(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
@@ -59,5 +73,15 @@ export function buildWhere(filters: Filters, counties: readonly string[] | null,
   if (filters.view === 'recent') { const b = bind(today); clauses.push(`registration_date BETWEEN (${b}::date - 29) AND ${b}::date`); }
   if (filters.view === 'soon') { const b = bind(today); clauses.push(`completion_date BETWEEN ${b}::date AND (${b}::date + INTERVAL '6 months')`); }
   if (filters.view === 'completed') { const b = bind(today); clauses.push(`completion_date BETWEEN (${b}::date - 29) AND ${b}::date`); }
+  if (filters.list) {
+    const list = getSmartList(filters.list);
+    if (!list) throw new FilterError('Unknown smart list.');
+    appendSmartListClauses(list, bind, clauses);
+  }
+  if (filters.upcoming) {
+    const b = bind(today);
+    clauses.push(`completion_date >= ${b}::date`);
+    clauses.push(`(current_status IS NULL OR current_status NOT IN (${bind('Project Closed')}, ${bind('Inspection Complete')}))`);
+  }
   return { where: clauses.join(' AND '), params };
 }
