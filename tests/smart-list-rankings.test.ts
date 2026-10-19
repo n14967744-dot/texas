@@ -115,3 +115,7 @@ test('bryan-priority ranks are contiguous 1..N and hidden rows are within 20 mi'
   for (const h of ranking.hidden) assert.ok(distanceToOffice(h.projectNumber, bryan)!.distanceMi <= 20, h.projectNumber);
   assert.equal(ranking.report!.radiusMi, 20);
 });
+
+test('bryan-priority notes use "Planned finish" wording', () => {
+  for (const e of getRanking('bryan-priority')!.ranked) assert.ok(!/Est\. completion/i.test(e.note), e.projectNumber);
+});

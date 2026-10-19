@@ -75,7 +75,7 @@ export default async function ReportPage({ params }: { params: Promise<{ slug: s
 
         <section className="report-section" aria-labelledby="start-here">
           <h2 id="start-here">Start here: Hot ({hot.length})</h2>
-          <p className="report-lede">Finishing within about six months (or just past their estimated date and not closed), strong fit for copiers, MFPs and managed print, and at least $250k. Click a project to open its details.</p>
+          <p className="report-lede">Finishing within about six months (or just past their planned finish and not closed), strong fit for copiers, MFPs and managed print, and at least $250k. Click a project to open its details.</p>
           <ReportTable rows={hot} listId={ranking.listId} />
         </section>
 

@@ -5,7 +5,10 @@ import type { ProjectListResponse, ProjectRow } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/format';
 import { Icon } from './icons';
 import { ScopePreview } from './scope-preview';
-import { StatusBadge } from './status-badge';
+import { StageChip, StatusBadge } from './status-badge';
+import { statusLabel, STATUS_SOURCE_NOTE } from '@/lib/status-labels';
+import { monthsFromToday, parseStages, STAGE_LABELS, STAGE_NOTE, STAGES, type Stage } from '@/lib/stage';
+import { businessToday } from '@/lib/query';
 import { ProjectModal } from './project-modal';
 import { getSmartList, SMART_LISTS } from '@/lib/smart-lists';
 import { buildProjectSearchParams } from '@/lib/project-params';
@@ -17,7 +20,7 @@ import { getRanking, getRankingEntry, hasRanking, PRIORITY_TIER_LABELS } from '@
 import { RADIUS_OPTIONS } from '@/lib/radius';
 
 type View = 'all' | 'recent' | 'soon' | 'completed';
-type Sort = 'estimated_cost' | 'project_name' | 'location_address' | 'current_status' | 'completion_date' | 'registration_date' | 'distance' | 'rank';
+type Sort = 'estimated_cost' | 'project_name' | 'location_address' | 'current_status' | 'completion_date' | 'registration_date' | 'stage' | 'distance' | 'rank';
 type State = ReturnType<typeof browserDefaults> & { office: OfficeId; view: View; sort: Sort };
 
 function baseDefaults(listId?: string): State {
@@ -26,9 +29,9 @@ function baseDefaults(listId?: string): State {
 
 const views = [
   { id: 'all', label: 'All projects' },
-  { id: 'recent', label: 'Recently registered' },
-  { id: 'soon', label: 'Completing soon' },
-  { id: 'completed', label: 'Recently completed' },
+  { id: 'recent', label: 'Recently filed' },
+  { id: 'soon', label: 'Finishing soon' },
+  { id: 'completed', label: 'Recently due' },
 ] as const;
 
 function readUrl(defaults: State, listId?: string): State {
@@ -40,7 +43,7 @@ function readUrl(defaults: State, listId?: string): State {
   for (const k of ['q', 'city', 'county', 'status', 'completionFrom', 'completionTo', 'registeredFrom', 'registeredTo'] as const) {
     result[k] = p.get(k) || '';
   }
-  if (['project_name', 'location_address', 'current_status', 'completion_date', 'registration_date', 'estimated_cost', 'distance'].includes(p.get('sort') || '')) {
+  if (['project_name', 'location_address', 'current_status', 'stage', 'completion_date', 'registration_date', 'estimated_cost', 'distance'].includes(p.get('sort') || '')) {
     result.sort = p.get('sort') as Sort;
   }
   if (p.get('sort') === 'rank' && listId && hasRanking(listId)) result.sort = 'rank';
@@ -53,6 +56,7 @@ function readUrl(defaults: State, listId?: string): State {
   if (Number.isSafeInteger(page) && page > 0 && page <= 100000) result.page = page;
   const size = Number(p.get('pageSize'));
   if ([10, 25, 50].includes(size)) result.pageSize = size;
+  try { result.stage = parseStages(p.get('stage') || '').join(','); } catch { result.stage = ''; }
   if (p.has('upcoming')) result.upcoming = p.get('upcoming') === '1' || p.get('upcoming') === 'true';
   if (p.has('hidden')) result.hidden = p.get('hidden') === '1' || p.get('hidden') === 'true';
   return result;
@@ -79,17 +83,23 @@ async function downloadListCsv(query: string, filename: string, listId?: string)
     page += 1;
     if (page > 200) break;
   }
-  const cols: (keyof ProjectRow)[] = [
-    'project_number', 'project_name', 'facility_name', 'location_address', 'location_city',
-    'location_county', 'current_status', 'type_of_work', 'scope_of_work', 'estimated_cost',
-    'registration_date', 'completion_date',
+  // [CSV header, value] — friendly date/status names; raw TABS status kept alongside.
+  const today = businessToday();
+  const cols: [string, (row: ProjectRow) => string | number | null | undefined][] = [
+    ['project_number', (r) => r.project_number], ['project_name', (r) => r.project_name], ['facility_name', (r) => r.facility_name],
+    ['location_address', (r) => r.location_address], ['location_city', (r) => r.location_city], ['location_county', (r) => r.location_county],
+    ['state_status', (r) => (r.current_status ? statusLabel(r.current_status) : '')], ['state_status_raw', (r) => r.current_status],
+    ['stage', (r) => (r.stage ? STAGE_LABELS[r.stage] : '')],
+    ['type_of_work', (r) => r.type_of_work], ['scope_of_work', (r) => r.scope_of_work], ['estimated_cost', (r) => r.estimated_cost],
+    ['filed_date', (r) => r.registration_date], ['planned_start', (r) => r.start_date], ['planned_finish', (r) => r.completion_date],
+    ['planned_finish_relative', (r) => monthsFromToday(r.completion_date, today)],
   ];
   const reviewCols = listId ? ['review_decision', 'review_reason', 'cost_note'] : [];
   const distCols = listId && rows.some((r) => r.distance_mi != null) ? ['distance_mi', 'geo_precision'] : [];
   const rankCols = listId && hasRanking(listId) ? ['priority_rank', 'priority_tier', 'priority_note'] : [];
-  const header = [...cols, ...reviewCols, ...distCols, ...rankCols].join(',');
+  const header = [...cols.map(([name]) => name), ...reviewCols, ...distCols, ...rankCols].join(',');
   const lines = [header].concat(rows.map((row) => {
-    const base = cols.map((col) => csvEscape(row[col]));
+    const base = cols.map(([, get]) => csvEscape(get(row)));
     if (!listId) return base.join(',');
     const entry = getReviewEntry(listId, row.project_number);
     const extra = [csvEscape(entry?.decision || 'keep'), csvEscape(entry?.reason || ''), csvEscape(entry?.costNote || '')];
@@ -291,13 +301,14 @@ export function ProjectBrowser({
     sort: key,
     direction: filters.sort === key
       ? (filters.direction === 'asc' ? 'desc' : 'asc')
-      : (key === 'project_name' || key === 'location_address' || key === 'current_status' || key === 'distance' || key === 'rank' ? 'asc' : 'desc'),
+      : (key === 'project_name' || key === 'location_address' || key === 'current_status' || key === 'stage' || key === 'distance' || key === 'rank' ? 'asc' : 'desc'),
   });
   const activeCount = [
     filters.coverage === 'outside' ? 'outside' : '',
     filters.city,
     filters.county,
     filters.status,
+    filters.stage,
     filters.completionFrom || filters.completionTo,
     filters.registeredFrom || filters.registeredTo,
   ].filter(Boolean).length;
@@ -309,15 +320,16 @@ export function ProjectBrowser({
   const showSkeleton = loading && !data;
   const busy = loading || refreshing;
   const presetActive = activeCompletionPreset(filters);
-  const columnCount = 8 + Number(Boolean(list && filters.scope === 'radius')) + Number(ranked);
+  const today = businessToday();
+  const columnCount = 9 + Number(Boolean(list && filters.scope === 'radius')) + Number(ranked);
 
   function goPage(page: number) {
     setFilters((f) => ({ ...f, page }));
     tableRegion.current?.scrollTo({ top: 0 });
   }
-  function header(label: string, key: Sort) {
+  function header(label: string, key: Sort, className?: string, title?: string) {
     return (
-      <th scope="col" aria-sort={filters.sort === key ? (filters.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <th scope="col" className={className} title={title} aria-sort={filters.sort === key ? (filters.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
         <button className="sort-button" onClick={() => sort(key)}>
           {label}
           <Icon name={filters.sort === key ? 'down' : 'sort'} size={13} style={filters.sort === key && filters.direction === 'asc' ? { transform: 'rotate(180deg)' } : undefined} />
@@ -478,10 +490,21 @@ export function ProjectBrowser({
                 <Icon name="down" size={14} />
               </label>
               <label className="select-control status-select">
-                <span className="sr-only">TABS status</span>
-                <select aria-label="Filter by TABS status" value={filters.status} onChange={(e) => change({ status: e.target.value })}>
-                  <option value="">All statuses</option>
-                  {data?.facets.statuses.map((s) => <option key={s}>{s}</option>)}
+                <span className="sr-only">State status</span>
+                <select aria-label="Filter by state status (from TDLR TABS filing)" title={STATUS_SOURCE_NOTE} value={filters.status} onChange={(e) => change({ status: e.target.value })}>
+                  <option value="">All state statuses</option>
+                  {data?.facets.statuses.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+                </select>
+                <Icon name="down" size={14} />
+              </label>
+              <label className="select-control stage-select">
+                <span className="sr-only">Stage</span>
+                <select aria-label="Filter by stage" title={STAGE_NOTE} value={filters.stage} onChange={(e) => change({ stage: e.target.value })}>
+                  <option value="">All stages</option>
+                  {STAGES.map((st) => (
+                    <option key={st} value={st}>{STAGE_LABELS[st]}{data?.stageCounts ? ` (${data.stageCounts[st].toLocaleString()})` : ''}</option>
+                  ))}
+                  {filters.stage.includes(',') && <option value={filters.stage}>{filters.stage.split(',').map((st) => STAGE_LABELS[st as Stage] ?? st).join(' + ')}</option>}
                 </select>
                 <Icon name="down" size={14} />
               </label>
@@ -494,7 +517,7 @@ export function ProjectBrowser({
           {datesOpen && (
             <div className="date-panel" id="date-filters">
               <fieldset>
-                <legend>Registration date</legend>
+                <legend>Filed date</legend>
                 <div className="date-range">
                   <label>From<input type="date" value={filters.registeredFrom} onChange={(e) => change({ registeredFrom: e.target.value })} /></label>
                   <span>–</span>
@@ -502,7 +525,7 @@ export function ProjectBrowser({
                 </div>
               </fieldset>
               <fieldset>
-                <legend>Estimated completion</legend>
+                <legend>Planned finish</legend>
                 <div className="date-range">
                   <label>From<input type="date" value={filters.completionFrom} onChange={(e) => change({ completionFrom: e.target.value })} /></label>
                   <span>–</span>
@@ -510,8 +533,8 @@ export function ProjectBrowser({
                 </div>
               </fieldset>
               <div className="date-presets">
-                <div className="date-presets-label">Completion presets</div>
-                <div className="date-preset-row" role="group" aria-label="Estimated completion presets">
+                <div className="date-presets-label">Planned finish presets</div>
+                <div className="date-preset-row" role="group" aria-label="Planned finish presets">
                   {COMPLETION_PRESETS.map((preset) => (
                     <button
                       key={preset.id}
@@ -535,13 +558,14 @@ export function ProjectBrowser({
               {filters.coverage === 'outside' && <span className="filter-chip">Outside mapped CTWP counties</span>}
               {filters.q && <span className="filter-chip">Search: {filters.q}</span>}
               {filters.city && <span className="filter-chip">{filters.city}</span>}
-              {filters.status && <span className="filter-chip">{filters.status}</span>}
+              {filters.status && <span className="filter-chip">{statusLabel(filters.status)}</span>}
+              {filters.stage && <span className="filter-chip">Stage: {filters.stage.split(',').map((st) => STAGE_LABELS[st as Stage] ?? st).join(' + ')}</span>}
               <button className="text-button" onClick={clear}>Clear filters</button>
             </div>
           )}
 
           {list && filters.upcoming && (
-            <div className="view-description">Upcoming only: estimated completion on or after today, excluding Project Closed and Inspection Complete. Toggle off to see every match with status so you can filter.</div>
+            <div className="view-description">Upcoming only: planned finish on or after today, excluding Closed out and Final inspection passed (built). Toggle off to see every match with status so you can filter.</div>
           )}
           {list && filters.hidden && (
             <div className="view-description">{ranked
@@ -561,27 +585,28 @@ export function ProjectBrowser({
           {filters.view !== 'all' && (
             <div className="view-description">
               {filters.view === 'recent'
-                ? 'Projects registered within the last 30 calendar days.'
+                ? 'Projects filed with the state within the last 30 calendar days.'
                 : filters.view === 'completed'
-                  ? 'Estimated completion dates in the past 30 calendar days, including today. Actual completion is not verified.'
-                  : 'Estimated completion within the next six months. Dates do not confirm construction progress.'}
+                  ? 'Planned finish dates in the past 30 calendar days, including today. Actual completion is not verified.'
+                  : 'Planned finish within the next six months. Dates do not confirm construction progress.'}
             </div>
           )}
 
           <div className={`table-region${refreshing ? ' is-refreshing' : ''}`} ref={tableRegion} aria-busy={busy}>
-            <table className={ranked ? 'ranked-table' : undefined}>
+            <table className={`projects-table${ranked ? ' ranked-table' : ''}`}>
               <thead>
                 <tr>
-                  {ranked && header('Priority', 'rank')}
-                  {header('Project', 'project_name')}
-                  {header('Address', 'location_address')}
-                  <th scope="col"><span className="column-label">Scope / description</span></th>
-                  {header('Est. cost', 'estimated_cost')}
-                  {list && filters.scope === 'radius' && header('Distance', 'distance')}
-                  {header('TABS status', 'current_status')}
-                  {header('Est. completion', 'completion_date')}
-                  {header('Registered', 'registration_date')}
-                  <th className="row-arrow" scope="col"><span className="sr-only">Open details</span></th>
+                  {ranked && header('Priority', 'rank', 'col-priority')}
+                  {header('Project', 'project_name', 'col-project')}
+                  {header('Address', 'location_address', 'col-address')}
+                  <th scope="col" className="col-scope"><span className="column-label">Scope / description</span></th>
+                  {header('Est. cost', 'estimated_cost', 'col-cost')}
+                  {list && filters.scope === 'radius' && header('Distance', 'distance', 'col-distance')}
+                  {header('State status', 'current_status', 'col-status', 'From the TDLR TABS filing')}
+                  {header('Stage', 'stage', 'col-stage', STAGE_NOTE)}
+                  {header('Planned finish', 'completion_date', 'col-finish')}
+                  {header('Filed', 'registration_date', 'col-filed')}
+                  <th className="row-arrow col-arrow" scope="col"><span className="sr-only">Open details</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -593,6 +618,7 @@ export function ProjectBrowser({
                       <td><div className="skeleton" /><div className="skeleton short" /></td>
                       <td><div className="skeleton" /></td>
                       <td><div className="skeleton" /></td>
+                      <td><div className="skeleton badge-skeleton" /></td>
                       <td><div className="skeleton badge-skeleton" /></td>
                       <td><div className="skeleton" /></td>
                       <td><div className="skeleton" /></td>
@@ -675,7 +701,11 @@ export function ProjectBrowser({
                         </td>
                       )}
                       <td><StatusBadge status={p.current_status} /></td>
-                      <td className="date-cell">{formatDate(p.completion_date)}</td>
+                      <td className="stage-cell"><StageChip stage={p.stage} /></td>
+                      <td className="date-cell">
+                        {formatDate(p.completion_date)}
+                        {monthsFromToday(p.completion_date, today) && <span className="relative-date">{monthsFromToday(p.completion_date, today)}</span>}
+                      </td>
                       <td className="date-cell registered-cell">{formatDate(p.registration_date)}</td>
                       <td className="row-arrow"><Icon name="chevron" size={16} /></td>
                     </tr>
@@ -719,7 +749,7 @@ export function ProjectBrowser({
 
         <div className="workspace-footnote">
           <span>Source: Texas Architectural Barriers System</span>
-          <span>{filters.office === 'texas' ? 'Collected Texas records · Office counties are provisional · Dates are estimates' : 'Territory coverage is provisional · Dates are estimates'}</span>
+          <span>{filters.office === 'texas' ? 'Collected Texas records · Office counties are provisional · Dates are planned dates from the state filing' : 'Territory coverage is provisional · Dates are planned dates from the state filing'}</span>
         </div>
       </main>
       {selected && <ProjectModal summary={selected} onClose={() => setSelected(null)} />}

@@ -2,10 +2,11 @@ import { RADIUS_OPTIONS } from './radius.ts';
 import { appendSmartListClauses, getSmartList } from './smart-lists.ts';
 import { hiddenProjectNumbers } from './smart-list-review.ts';
 import { hasRanking } from './smart-list-rankings.ts';
+import { parseStages, stageSql, type Stage } from './stage.ts';
 
 export type SqlQuery = { query: string; params: (string | number)[] };
 export type View = 'all' | 'recent' | 'soon' | 'completed';
-export const SORTS = { estimated_cost: 'estimated_cost', registration_date: 'registration_date', completion_date: 'completion_date', project_name: 'project_name', location_address: 'location_address', current_status: 'current_status', distance: 'distance', rank: 'rank' } as const;
+export const SORTS = { estimated_cost: 'estimated_cost', registration_date: 'registration_date', completion_date: 'completion_date', project_name: 'project_name', location_address: 'location_address', current_status: 'current_status', stage: 'stage', distance: 'distance', rank: 'rank' } as const;
 export type CoverageScope = 'territory' | 'radius';
 export const RADIUS_MILES = [30, 60, 100] as const;
 export interface Filters {
@@ -14,7 +15,9 @@ export interface Filters {
   view: View; sort: keyof typeof SORTS; direction: 'asc' | 'desc'; page: number; pageSize: number;
   /** Smart list slug from lib/smart-lists.ts, or empty when browsing all projects. */
   list: string;
-  /** Est. completion on/after today and not Closed / Inspection Complete. */
+  /** Derived stage filter (lib/stage.ts); empty = all stages. */
+  stage: Stage[];
+  /** Planned finish on/after today and not Closed / Inspection Complete. */
   upcoming: boolean;
   /** When true on a smart list, include manually hidden projects. */
   hidden: boolean;
@@ -67,10 +70,12 @@ export function parseFilters(params: URLSearchParams): Filters {
   const radiusRaw = get('radius') || '60';
   const radius = Number(radiusRaw);
   if (!(RADIUS_OPTIONS as readonly number[]).includes(radius)) throw new FilterError('Invalid radius.');
+  let stage: Stage[];
+  try { stage = parseStages(get('stage')); } catch (e) { throw new FilterError((e as Error).message); }
   const dates = { registeredFrom: dateParam(params, 'registeredFrom'), registeredTo: dateParam(params, 'registeredTo'), completionFrom: dateParam(params, 'completionFrom'), completionTo: dateParam(params, 'completionTo') };
-  if (dates.registeredFrom && dates.registeredTo && dates.registeredFrom > dates.registeredTo) throw new FilterError('Registration date range is reversed.');
-  if (dates.completionFrom && dates.completionTo && dates.completionFrom > dates.completionTo) throw new FilterError('Completion date range is reversed.');
-  return { coverage: coverage as 'all' | 'outside', office: get('office') || 'all', q, city: get('city'), county: get('county'), status: get('status'), ...dates, view: view as View, sort: sort as keyof typeof SORTS, direction: direction as 'asc' | 'desc', page, pageSize, list, upcoming, hidden, scope: scopeRaw as CoverageScope, radius };
+  if (dates.registeredFrom && dates.registeredTo && dates.registeredFrom > dates.registeredTo) throw new FilterError('Filed date range is reversed.');
+  if (dates.completionFrom && dates.completionTo && dates.completionFrom > dates.completionTo) throw new FilterError('Planned finish date range is reversed.');
+  return { coverage: coverage as 'all' | 'outside', office: get('office') || 'all', q, city: get('city'), county: get('county'), status: get('status'), ...dates, view: view as View, sort: sort as keyof typeof SORTS, direction: direction as 'asc' | 'desc', page, pageSize, list, upcoming, hidden, scope: scopeRaw as CoverageScope, radius, stage };
 }
 export function businessToday(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
@@ -96,6 +101,10 @@ export function buildWhere(filters: Filters, counties: readonly string[] | null,
   if (filters.view === 'recent') { const b = bind(today); clauses.push(`registration_date BETWEEN (${b}::date - 29) AND ${b}::date`); }
   if (filters.view === 'soon') { const b = bind(today); clauses.push(`completion_date BETWEEN ${b}::date AND (${b}::date + INTERVAL '6 months')`); }
   if (filters.view === 'completed') { const b = bind(today); clauses.push(`completion_date BETWEEN (${b}::date - 29) AND ${b}::date`); }
+  if (filters.stage?.length) {
+    const b = bind(today);
+    clauses.push(`${stageSql(b)} IN (${filters.stage.map(bind).join(',')})`);
+  }
   if (filters.list) {
     const list = getSmartList(filters.list);
     if (!list) throw new FilterError('Unknown smart list.');

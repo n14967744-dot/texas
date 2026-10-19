@@ -14,6 +14,8 @@ export type ProjectParamState = {
   city: string;
   county: string;
   status: string;
+  /** Comma-separated derived stages (lib/stage.ts). */
+  stage: string;
   completionFrom: string;
   completionTo: string;
   registeredFrom: string;
@@ -37,6 +39,7 @@ export const API_PROJECT_PARAM_DEFAULTS: ProjectParamState = {
   city: '',
   county: '',
   status: '',
+  stage: '',
   completionFrom: '',
   completionTo: '',
   registeredFrom: '',

@@ -12,6 +12,7 @@ export function browserDefaults(listId?: string): ProjectParamState {
     city: '',
     county: '',
     status: '',
+    stage: '',
     completionFrom: '',
     completionTo: '',
     registeredFrom: '',
@@ -31,11 +32,12 @@ export function browserDefaults(listId?: string): ProjectParamState {
 export function sortMetaLabel(sort: string, direction: 'asc' | 'desc'): string {
   const labels: Record<string, string> = {
     estimated_cost: 'est. cost',
-    registration_date: 'registration date',
-    completion_date: 'est. completion',
+    registration_date: 'filed date',
+    completion_date: 'planned finish',
     project_name: 'project name',
     location_address: 'address',
-    current_status: 'status',
+    current_status: 'state status',
+    stage: 'stage',
     distance: 'distance',
     rank: 'priority rank',
   };
@@ -43,6 +45,8 @@ export function sortMetaLabel(sort: string, direction: 'asc' | 'desc'): string {
   if (sort === 'estimated_cost') return `sorted by ${name} (${direction === 'desc' ? 'highest first' : 'lowest first'})`;
   if (sort === 'rank') return `sorted by ${name} (${direction === 'asc' ? 'best first' : 'lowest first'})`;
   if (sort === 'distance') return `sorted by ${name} (${direction === 'asc' ? 'nearest first' : 'farthest first'})`;
+  if (sort === 'completion_date') return `sorted by ${name} (${direction === 'asc' ? 'soonest first' : 'latest first'})`;
+  if (sort === 'stage') return `sorted by ${name} (${direction === 'asc' ? 'not started → built' : 'built → not started'})`;
   if (sort.endsWith('_date')) return `sorted by ${name} (${direction === 'desc' ? 'newest first' : 'oldest first'})`;
   return `sorted by ${name} (${direction === 'asc' ? 'A→Z' : 'Z→A'})`;
 }
