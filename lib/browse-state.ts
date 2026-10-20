@@ -28,7 +28,7 @@ export function resolveBrowserState(raw: URLSearchParams, cookieOffice: string |
   merged.set('office', office);
   if (list) merged.set('list', list);
   else merged.delete('list');
-  if (!raw.get('sort') || (merged.get('sort') === 'rank' && !hasRanking(list))) {
+  if (!raw.get('sort') || ((merged.get('sort') === 'rank' || merged.get('sort') === 'call') && !hasRanking(list))) {
     merged.set('sort', defaults.sort);
     merged.set('direction', defaults.direction);
   }
@@ -60,7 +60,7 @@ export function canonicalizeBrowseParams(raw: URLSearchParams, cookieOffice: str
     changed = true;
   }
   const effectiveList = next.get('list') || '';
-  if (next.get('sort') === 'rank' && !hasRanking(effectiveList)) {
+  if ((next.get('sort') === 'rank' || next.get('sort') === 'call') && !hasRanking(effectiveList)) {
     next.delete('sort');
     next.delete('direction');
     changed = true;

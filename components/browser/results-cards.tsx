@@ -64,11 +64,11 @@ export function ResultsCards({
               <span className="project-card-title">
                 {name}
                 {project.has_research && <span className="researched-badge">Researched</span>}
-                <ProjectListMarks listId={listId} projectNumber={project.project_number} placement="row" />
               </span>
               <span className="secondary-line">{project.project_number}</span>
               <span className="project-card-address">{[project.location_address, project.location_city].filter(Boolean).join(', ') || 'Address not listed'}</span>
             </button>
+            <ProjectListMarks listId={listId} projectNumber={project.project_number} placement="row" />
             <dl className="project-card-facts">
               <div><dt>Scope</dt><dd><ScopePreview scope={project.scope_of_work} /></dd></div>
               <div><dt>Est. cost</dt><dd>{formatMoney(project.estimated_cost)}</dd></div>
