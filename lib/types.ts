@@ -1,4 +1,5 @@
 import type { ResearchView } from './research.ts';
+import type { TimingTag, TimingTone } from './timing.ts';
 
 export type GeoPrecision = 'address' | 'city' | 'county' | 'none';
 
@@ -23,8 +24,11 @@ export interface ProjectRow {
   geo_precision?: GeoPrecision | string | null;
   /** True when leads.project_research has a row. */
   has_research?: boolean;
-  /** Cautious timing label from lib/timing.ts. */
+  /** Plain timing label from lib/timing.ts. The age tag is timing_tag, not part of this string. */
   timing_label?: string;
+  timing_tag?: TimingTag | null;
+  timing_flags?: string[];
+  timing_tone?: TimingTone;
 }
 
 export interface Project extends ProjectRow {

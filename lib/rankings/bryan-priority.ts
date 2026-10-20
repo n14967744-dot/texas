@@ -35,7 +35,7 @@ export const BRYAN_PRIORITY_RANKING: SmartListRanking = {
     focusCities: ['Bryan', 'College Station'],
     method: [
       'Every TABS filing in 30 counties around Bryan was pulled from the project database and placed on a map (Census address match, or the city center when the address did not match).',
-      'Kept filings within 20 straight-line miles of the Bryan office whose planned finish is today or later, plus filings whose planned finish passed in the last 90 days but are still not closed or inspected (likely moving in now).',
+      'Kept filings within 20 straight-line miles of the Bryan office whose planned finish is today or later, plus filings whose planned finish passed in the last 90 days but are still not closed or inspected.',
       'Each filing was reviewed by hand. Roads, sidewalks, utilities, parks, parking, c-stores and fuel, restaurants, salons and gyms, speculative shells, pure storage, jobs under $100k and duplicate filings were hidden.',
       'Each kept project is scored out of 10: timing counts 50%, fit 30%, size 20%.',
       'Timing: finishing within 3 months scores highest, then 3–6 months, then past its planned finish but not closed, then under construction (start date already passed), then not started.',

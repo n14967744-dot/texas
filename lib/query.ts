@@ -114,6 +114,7 @@ function costParam(params: URLSearchParams, key: string): number | null {
   return value;
 }
 
+/** Extra params are ignored. That includes the retired `stage` filter, so old links still open. */
 export function parseFilters(params: URLSearchParams): Filters {
   const sort = params.get('sort') || FILTER_DEFAULTS.sort;
   const direction = params.get('direction') || FILTER_DEFAULTS.direction;
@@ -228,7 +229,7 @@ function pushRange(
   if (to) clauses.push(`${dateExpr(column)} <= ${bind(to)}::date`);
 }
 
-export type BuiltWhere = {
+export type CompiledWhere = {
   from: string;
   where: string;
   attributeWhere: string;
@@ -241,7 +242,7 @@ export type BuiltWhere = {
  * One WHERE for search, list, dates, cost, work type, place, and radius.
  * `from` is the located subquery (address, else city centroid, else county centroid).
  */
-export function buildWhere(filters: Filters, today: string): BuiltWhere {
+export function buildWhere(filters: Filters, today: string): CompiledWhere {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) throw new FilterError('Invalid business date.');
   if (!isBrowseOffice(filters.office)) throw new FilterError('Unknown office.');
   const params: (string | number)[] = [];
