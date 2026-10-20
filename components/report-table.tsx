@@ -1,4 +1,5 @@
 import { formatDate, formatMoney, safeSourceLink } from '@/lib/format';
+import { browseListHref } from '@/lib/redirects';
 import { PRIORITY_TIER_LABELS } from '@/lib/smart-list-rankings';
 import type { ReportRow } from '@/lib/reports';
 import { StageChip } from './status-badge';
@@ -6,7 +7,7 @@ import { businessToday } from '@/lib/query';
 import { monthsFromToday, STAGE_NOTE } from '@/lib/stage';
 
 export function projectListHref(listId: string, projectNumber: string) {
-  return `/lists/${listId}?${new URLSearchParams({ q: projectNumber, open: projectNumber })}`;
+  return browseListHref(listId, { q: projectNumber, open: projectNumber });
 }
 
 export function ReportTable({ rows, listId, compact = false, showTier = false }: { rows: ReportRow[]; listId: string; compact?: boolean; showTier?: boolean }) {

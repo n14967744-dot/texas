@@ -25,7 +25,8 @@ export const STAGE_LABELS: Record<Stage, string> = {
 
 export const STAGE_NOTE = 'Based on planned dates in the state filing, not confirmed site progress.';
 export const FINISHING_SOON_DAYS = 90;
-export const BUILT_STATUSES = ['Inspection Complete', 'Project Closed'] as const;
+/** 'Inspection Completed' is the scraper spelling of 'Inspection Complete'. */
+export const BUILT_STATUSES = ['Inspection Complete', 'Inspection Completed', 'Project Closed'] as const;
 
 export function isStage(value: string): value is Stage {
   return (STAGES as readonly string[]).includes(value);
@@ -67,7 +68,7 @@ export function deriveStage(
  */
 export function stageSql(today: string): string {
   const start = `NULLIF(start_date::text, '')::date`;
-  return `(CASE WHEN current_status IN ('Inspection Complete', 'Project Closed') THEN 'built'`
+  return `(CASE WHEN current_status IN ('Inspection Complete', 'Inspection Completed', 'Project Closed') THEN 'built'`
     + ` WHEN ${start} > ${today}::date THEN 'not_started'`
     + ` WHEN completion_date < ${today}::date THEN 'past_due'`
     + ` WHEN completion_date <= ${today}::date + ${FINISHING_SOON_DAYS} THEN 'finishing_soon'`

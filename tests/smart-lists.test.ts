@@ -51,21 +51,20 @@ test('data center matcher includes core vocabulary and excludes known false posi
   }, list), false);
 });
 
-test('list and upcoming filters are validated and applied in SQL', () => {
+test('list filters are validated and keyword SQL does not imply a finish window', () => {
   assert.throws(() => parseFilters(new URLSearchParams({ list: 'nope' })));
   assert.throws(() => parseFilters(new URLSearchParams({ list: 'Data Centers' })));
-  assert.throws(() => parseFilters(new URLSearchParams({ upcoming: 'maybe' })));
   const filters = parseFilters(new URLSearchParams({ list: 'data-centers', upcoming: '1', office: 'texas', sort: 'completion_date', direction: 'asc' }));
   assert.equal(filters.list, 'data-centers');
-  assert.equal(filters.upcoming, true);
-  const query = buildWhere(filters, null, '2026-10-19');
+  assert.equal('upcoming' in filters, false);
+  const query = buildWhere(filters, '2026-10-19');
   assert.ok(query.where.includes('~*'));
   assert.ok(query.where.includes('NOT'));
-  assert.ok(query.where.includes('completion_date >='));
+  assert.equal(query.where.includes('completion_date >='), false);
   assert.ok(query.params.includes(combinedPattern(list.include)));
   assert.ok(query.params.includes(combinedPattern(list.exclude)));
-  assert.ok(query.params.includes('Project Closed'));
-  assert.ok(query.params.includes('Inspection Complete'));
+  assert.equal(query.params.includes('Project Closed'), false);
+  assert.equal(query.params.includes('Inspection Complete'), false);
 });
 
 test('offline dump: data-centers rule yields roughly the hand-reviewed count', () => {

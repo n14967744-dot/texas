@@ -3,6 +3,7 @@ export const STATUS_LABELS: Record<string, string> = {
   'Project Registered': 'Filed, plans not reviewed',
   'Review Complete': 'Plans approved',
   'Inspection Complete': 'Final inspection passed (built)',
+  'Inspection Completed': 'Final inspection passed (built)',
   'Project Closed': 'Closed out',
 };
 

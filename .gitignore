@@ -8,3 +8,4 @@ out/
 .vercel/
 __pycache__/
 *.pyc
+screens/

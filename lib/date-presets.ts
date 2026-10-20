@@ -1,44 +1,67 @@
-import { businessToday } from './query.ts';
+/** Inclusive America/Chicago calendar ranges. Callers pass the Chicago business date. */
 
-export type CompletionPresetId = 'next30' | 'next90' | 'next6mo' | 'thisYear' | 'nextYear';
+export type StartPreset = 'next30' | 'next90' | 'reached';
+export type FinishPreset = 'next30' | 'next90' | 'next6mo' | 'prev90';
+export type FiledPreset = 'last7' | 'last30' | 'last90';
 
-export type DateRange = { completionFrom: string; completionTo: string };
+export type DateRange = { from: string; to: string };
 
-function addDays(iso: string, days: number): string {
-  const date = new Date(`${iso}T12:00:00Z`);
+export const START_PRESETS: { id: StartPreset; label: string }[] = [
+  { id: 'next30', label: 'Next 30 days' },
+  { id: 'next90', label: 'Next 90 days' },
+  { id: 'reached', label: 'Start date reached' },
+];
+
+export const FINISH_PRESETS: { id: FinishPreset; label: string }[] = [
+  { id: 'next30', label: 'Next 30 days' },
+  { id: 'next90', label: 'Next 90 days' },
+  { id: 'next6mo', label: 'Next 6 months' },
+  { id: 'prev90', label: 'Previous 90 days' },
+];
+
+export const FILED_PRESETS: { id: FiledPreset; label: string }[] = [
+  { id: 'last7', label: 'Last 7 days' },
+  { id: 'last30', label: 'Last 30 days' },
+  { id: 'last90', label: 'Last 90 days' },
+];
+
+export function addDays(iso: string, days: number): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
 
-function endOfYear(year: number): string {
-  return `${year}-12-31`;
+/** Calendar months, clamping the day when the target month is shorter. */
+export function addMonths(iso: string, months: number): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  const target = new Date(Date.UTC(year, month - 1 + months, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  const date = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), Math.min(day, lastDay)));
+  return date.toISOString().slice(0, 10);
 }
 
-/** Inclusive estimated-completion presets in America/Chicago business dates. */
-export function completionPresetRange(id: CompletionPresetId, today = businessToday()): DateRange {
-  const year = Number(today.slice(0, 4));
-  switch (id) {
-    case 'next30':
-      return { completionFrom: today, completionTo: addDays(today, 30) };
-    case 'next90':
-      return { completionFrom: today, completionTo: addDays(today, 90) };
-    case 'next6mo':
-      return { completionFrom: today, completionTo: addDays(today, 183) };
-    case 'thisYear':
-      return { completionFrom: today, completionTo: endOfYear(year) };
-    case 'nextYear':
-      return { completionFrom: `${year + 1}-01-01`, completionTo: endOfYear(year + 1) };
-    default: {
-      const _exhaustive: never = id;
-      return _exhaustive;
-    }
+/**
+ * Next N days is [today, today+N] inclusive.
+ * Previous/last N days is [today−N, today] inclusive.
+ * "Next 6 months" is [today, today plus 6 calendar months] inclusive.
+ * "Start date reached" is not a closed range — the caller compares start_date <= today.
+ */
+export function presetRange(kind: 'start' | 'finish' | 'filed', id: string, today: string): DateRange | null {
+  if (kind === 'start') {
+    if (id === 'next30') return { from: today, to: addDays(today, 30) };
+    if (id === 'next90') return { from: today, to: addDays(today, 90) };
+    return null;
   }
+  if (kind === 'finish') {
+    if (id === 'next30') return { from: today, to: addDays(today, 30) };
+    if (id === 'next90') return { from: today, to: addDays(today, 90) };
+    if (id === 'next6mo') return { from: today, to: addMonths(today, 6) };
+    if (id === 'prev90') return { from: addDays(today, -90), to: today };
+    return null;
+  }
+  if (id === 'last7') return { from: addDays(today, -7), to: today };
+  if (id === 'last30') return { from: addDays(today, -30), to: today };
+  if (id === 'last90') return { from: addDays(today, -90), to: today };
+  return null;
 }
-
-export const COMPLETION_PRESETS: { id: CompletionPresetId; label: string }[] = [
-  { id: 'next30', label: 'Next 30 days' },
-  { id: 'next90', label: 'Next 90 days' },
-  { id: 'next6mo', label: 'Next 6 months' },
-  { id: 'thisYear', label: 'Rest of this year' },
-  { id: 'nextYear', label: 'Next year' },
-];

@@ -18,7 +18,7 @@ export default function ReportsIndexPage() {
           <div>
             <div className="eyebrow territory-eyebrow">PRIORITY REPORTS</div>
             <h1>Reports</h1>
-            <p>Read-only summaries of ranked smart lists. Each report has a matching sortable table under <a href="/lists">Smart Lists</a>.</p>
+            <p>Read-only summaries of ranked lists. Open the same projects in the project browser, sorted by rank.</p>
           </div>
         </div>
         <ul className="smart-list-cards">

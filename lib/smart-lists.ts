@@ -4,8 +4,8 @@
  * To add a new list:
  *  1. Append one object to SMART_LISTS below (id/slug, title, description,
  *     include/exclude regexes, optional fields and filters).
- *  2. Visit /lists/<id> — the nav, API (`?list=<id>`), and catalog pick it up
- *     automatically. No route or SQL changes required for a basic keyword list.
+ *  2. The project browser and API pick it up from `?list=<id>`.
+ *     Old /lists/<id> URLs redirect there. No route or SQL changes required for a basic keyword list.
  *
  * Include/exclude patterns are case-insensitive and must work in both JavaScript
  * RegExp and PostgreSQL POSIX `~*` (prefer `[\\s\\-_]*`, `(?:...)`, avoid `\\b`).
@@ -64,7 +64,7 @@ const DATA_CENTERS: SmartListDefinition = {
   description:
     'Commercial and hyperscale data center filings across Texas TABS — new builds, data halls, fit-outs, and clear operator campus work. Keyword-matched so new registrations appear automatically.',
   upcomingOnlyDefault: true,
-  defaultSort: 'estimated_cost',
+  defaultSort: 'registration_date',
   defaultDirection: 'desc',
   include: [
     // Primary DC vocabulary
