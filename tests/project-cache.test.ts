@@ -10,7 +10,8 @@ const sample: ProjectListResponse = {
   pageSize: 50,
   pages: 1,
   latestFetch: null,
-  facets: { cities: [], counties: [], statuses: [] },
+  facets: { cities: [], counties: [], workTypes: [] },
+  coverage: { address: 0, approximate: 0, unknown: 0, unknownPool: 0 },
 };
 
 test('project cache round-trips through memory', () => {

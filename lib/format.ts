@@ -14,3 +14,13 @@ export function formatMoney(value: string | number | null) {
 export function safeSourceLink(value: string | null) {
   try { const url = new URL(value || ''); return url.protocol === 'https:' && (url.hostname === 'tdlr.texas.gov' || url.hostname.endsWith('.tdlr.texas.gov')) ? url.href : null; } catch { return null; }
 }
+
+/** https URLs only. Used for research sources and contact websites. */
+export function safeHttpsUrl(value: string | null | undefined): string | null {
+  try {
+    const url = new URL(value || '');
+    return url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}

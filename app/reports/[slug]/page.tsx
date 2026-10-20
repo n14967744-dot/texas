@@ -3,6 +3,7 @@ import { ReportHeader } from '@/components/report-header';
 import { ReportTable } from '@/components/report-table';
 import { formatDate } from '@/lib/format';
 import { loadRankingReport, type ReportRow } from '@/lib/reports';
+import { browseListHref } from '@/lib/redirects';
 import { getRanking } from '@/lib/smart-list-rankings';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +32,7 @@ export default async function ReportPage({ params }: { params: Promise<{ slug: s
   const pipeline = byTier('pipeline');
   const focus = new Set(report.focusCities.map((c) => c.toLowerCase()));
   const inTown = hot.filter((row) => row.city && focus.has(row.city.toLowerCase()));
-  const listHref = `/lists/${ranking.listId}`;
+  const listHref = browseListHref(ranking.listId);
   const majorReasons = data.hiddenReasons.filter((item) => item.count >= 3);
   const otherReasons = data.hiddenReasons.filter((item) => item.count < 3);
   const otherCount = otherReasons.reduce((sum, item) => sum + item.count, 0);
@@ -86,7 +87,7 @@ export default async function ReportPage({ params }: { params: Promise<{ slug: s
               {inTown.map((row) => (
                 <li key={row.projectNumber}>
                   <span className="report-intown-rank">#{row.rank}</span>
-                  <a href={`${listHref}?${new URLSearchParams({ q: row.projectNumber, open: row.projectNumber })}`}>{row.name || row.projectNumber}</a>
+                  <a href={browseListHref(ranking.listId, { q: row.projectNumber, open: row.projectNumber })}>{row.name || row.projectNumber}</a>
                   <span className="muted"> · {row.city} · {row.completion ? formatDate(row.completion) : 'date not listed'}</span>
                 </li>
               ))}
@@ -106,7 +107,7 @@ export default async function ReportPage({ params }: { params: Promise<{ slug: s
 
         <section className="report-section" aria-labelledby="hidden-summary">
           <h2 id="hidden-summary">Hidden as bad fits ({data.hiddenCount})</h2>
-          <p className="report-lede">Still in the list behind <a href={`${listHref}?hidden=1`}>Show hidden</a>, each with its reason.</p>
+          <p className="report-lede">Still in the list behind <a href={browseListHref(ranking.listId, { hidden: '1' })}>Show hidden</a>, each with its reason.</p>
           <table className="report-table report-reasons">
             <thead><tr><th scope="col">Reason</th><th scope="col">Filings</th></tr></thead>
             <tbody>

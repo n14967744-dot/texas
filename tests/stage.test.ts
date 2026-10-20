@@ -9,6 +9,7 @@ const row = (start: string | null, finish: string | null, status = 'Review Compl
 
 test('stage: built statuses win over dates', () => {
   assert.equal(deriveStage(row('2027-01-01', '2027-06-01', 'Inspection Complete'), today), 'built');
+  assert.equal(deriveStage(row('2027-01-01', '2027-06-01', 'Inspection Completed'), today), 'built');
   assert.equal(deriveStage(row(null, null, 'Project Closed'), today), 'built');
 });
 
@@ -45,6 +46,7 @@ test('stage labels and status display names', () => {
   assert.equal(statusLabel('Project Registered'), 'Filed, plans not reviewed');
   assert.equal(statusLabel('Review Complete'), 'Plans approved');
   assert.equal(statusLabel('Inspection Complete'), 'Final inspection passed (built)');
+  assert.equal(statusLabel('Inspection Completed'), 'Final inspection passed (built)');
   assert.equal(statusLabel('Project Closed'), 'Closed out');
   assert.equal(statusLabel('Something New'), 'Something New');
   assert.equal(statusLabel(null), 'Not listed');
@@ -58,19 +60,15 @@ test('monthsFromToday relative text', () => {
   assert.equal(monthsFromToday(null, today), null);
 });
 
-test('stage param parsing, filter SQL and sort', () => {
+test('stage SQL still classifies reports, and the project browser does not filter by stage', () => {
   assert.deepEqual(parseStages('past_due,finishing_soon,past_due'), ['past_due', 'finishing_soon']);
   assert.throws(() => parseStages('bogus'));
-  assert.throws(() => parseFilters(new URLSearchParams({ stage: 'bogus' })));
-  const f = parseFilters(new URLSearchParams({ stage: 'finishing_soon,past_due', sort: 'stage', direction: 'asc' }));
-  assert.deepEqual(f.stage, ['finishing_soon', 'past_due']);
-  assert.equal(f.sort, 'stage');
-  assert.ok('stage' in SORTS);
-  const { where, params } = buildWhere(f, null, today);
-  assert.match(where, /CASE WHEN current_status IN/);
-  assert.ok(params.includes('finishing_soon') && params.includes('past_due') && params.includes(today));
-  assert.equal(parseFilters(new URLSearchParams()).stage.length, 0);
-  assert.ok(!buildWhere(parseFilters(new URLSearchParams()), null, today).where.includes('CASE'));
-  for (const s of STAGES) assert.ok(stageSql('$1').includes(`'${s}'`));
+  assert.throws(() => parseFilters(new URLSearchParams({ sort: 'stage' })));
+  assert.equal('stage' in SORTS, false);
+  assert.equal(parseFilters(new URLSearchParams({ stage: 'finishing_soon' })).sort, 'registration_date');
+  assert.equal(parseFilters(new URLSearchParams({ stage: 'finishing_soon' })).direction, 'desc');
+  assert.match(stageSql('$1'), /Inspection Completed/);
+  for (const stage of STAGES) assert.ok(stageSql('$1').includes(`'${stage}'`));
   assert.match(stageOrderSql(`'${today}'`), /^array_position\(ARRAY\['not_started'/);
+  assert.equal(buildWhere(parseFilters(new URLSearchParams()), today).where.includes('CASE WHEN current_status'), false);
 });

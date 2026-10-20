@@ -1,84 +1,43 @@
+import { FILTER_DEFAULTS, type Filters } from './query.ts';
+
 /**
- * Serialize project browser filters for /api/projects and the URL.
- *
- * Params are omitted only when they match the API's parseFilters defaults.
- * Do not compare against page-specific UI defaults (e.g. smart lists start on
- * office=texas + sort=completion_date) — omitting those would make the API fall
- * back to office=all / registration_date and silently shrink or re-sort results.
+ * One serializer for the browser URL, /api/projects, and CSV export.
+ * Values that match parseFilters defaults are omitted, except `office`,
+ * which is always written so a shared link does not depend on the cookie.
  */
-export type ProjectParamState = {
-  coverage: 'all' | 'outside';
-  office: string;
-  view: string;
-  q: string;
-  city: string;
-  county: string;
-  status: string;
-  /** Comma-separated derived stages (lib/stage.ts). */
-  stage: string;
-  completionFrom: string;
-  completionTo: string;
-  registeredFrom: string;
-  registeredTo: string;
-  sort: string;
-  direction: 'asc' | 'desc';
-  page: number;
-  pageSize: number;
-  upcoming: boolean;
-  hidden: boolean;
-  scope: string;
-  radius: number;
-};
-
-/** Mirrors parseFilters() defaults in lib/query.ts when a key is absent. */
-export const API_PROJECT_PARAM_DEFAULTS: ProjectParamState = {
-  coverage: 'all',
-  office: 'all',
-  view: 'all',
-  q: '',
-  city: '',
-  county: '',
-  status: '',
-  stage: '',
-  completionFrom: '',
-  completionTo: '',
-  registeredFrom: '',
-  registeredTo: '',
-  sort: 'registration_date',
-  direction: 'desc',
-  page: 1,
-  pageSize: 50,
-  upcoming: false,
-  hidden: false,
-  scope: 'territory',
-  radius: 60,
-};
-
-export function buildProjectSearchParams(
-  filters: ProjectParamState,
-  options: { listId?: string } = {},
-): string {
-  const p = new URLSearchParams();
-  const defaults = API_PROJECT_PARAM_DEFAULTS;
-  (Object.keys(defaults) as (keyof ProjectParamState)[]).forEach((key) => {
-    if (key === 'upcoming' || key === 'hidden' || key === 'scope' || key === 'radius') return;
-    const value = filters[key];
-    if (value === '' || value === defaults[key]) return;
-    p.set(key, String(value));
-  });
-  if (options.listId) {
-    p.set('list', options.listId);
-    p.set('upcoming', filters.upcoming ? '1' : '0');
-    if (filters.hidden) p.set('hidden', '1');
-    if (filters.scope && filters.scope !== 'territory') p.set('scope', filters.scope);
-    if (filters.scope === 'radius') p.set('radius', String(filters.radius || 60));
-  } else if (filters.upcoming) {
-    p.set('upcoming', '1');
+export function filtersToSearchParams(filters: Filters): URLSearchParams {
+  const params = new URLSearchParams();
+  const defaults = FILTER_DEFAULTS;
+  params.set('office', filters.office);
+  if (filters.list) params.set('list', filters.list);
+  if (filters.q) params.set('q', filters.q);
+  if (filters.city) params.set('city', filters.city);
+  if (filters.county) params.set('county', filters.county);
+  if (filters.workType) params.set('workType', filters.workType);
+  if (filters.radius !== defaults.radius) params.set('radius', String(filters.radius));
+  if (filters.includeUnknown) params.set('unknown', '1');
+  if (filters.startPreset) params.set('start', filters.startPreset);
+  if (filters.startFrom) params.set('startFrom', filters.startFrom);
+  if (filters.startTo) params.set('startTo', filters.startTo);
+  if (filters.finishPreset) params.set('finish', filters.finishPreset);
+  if (filters.finishFrom) params.set('finishFrom', filters.finishFrom);
+  if (filters.finishTo) params.set('finishTo', filters.finishTo);
+  if (filters.costMin != null) params.set('costMin', String(filters.costMin));
+  if (filters.costMax != null) params.set('costMax', String(filters.costMax));
+  if (filters.includeNoCost) params.set('noCost', '1');
+  if (filters.filedPreset) params.set('filed', filters.filedPreset);
+  if (filters.registeredFrom) params.set('registeredFrom', filters.registeredFrom);
+  if (filters.registeredTo) params.set('registeredTo', filters.registeredTo);
+  if (filters.hidden) params.set('hidden', '1');
+  if (filters.sort !== defaults.sort || filters.direction !== defaults.direction) {
+    params.set('sort', filters.sort);
+    params.set('direction', filters.direction);
   }
-  // When sort differs from the API default, always pair direction so URLs are explicit
-  // even if direction happens to match the API default (desc).
-  if (p.has('sort') && !p.has('direction')) {
-    p.set('direction', filters.direction);
-  }
-  return p.toString();
+  if (filters.page !== defaults.page) params.set('page', String(filters.page));
+  if (filters.pageSize !== defaults.pageSize) params.set('pageSize', String(filters.pageSize));
+  return params;
+}
+
+export function filtersToQueryString(filters: Filters): string {
+  return filtersToSearchParams(filters).toString();
 }

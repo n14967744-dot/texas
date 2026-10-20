@@ -1,4 +1,7 @@
-import type { Stage } from './stage';
+import type { ResearchView } from './research.ts';
+
+export type GeoPrecision = 'address' | 'city' | 'county' | 'none';
+
 export interface ProjectRow {
   estimated_cost: string | number | null;
   scope_of_work: string | null;
@@ -15,25 +18,45 @@ export interface ProjectRow {
   start_date?: string | null;
   completion_date: string | null;
   fetched_at: string | null;
-  /** Derived stage (lib/stage.ts), computed server-side. */
-  stage?: Stage;
-  /** Miles from selected office (radius mode). */
+  /** Straight-line miles. Null when the location is unknown. */
   distance_mi?: number | null;
-  geo_precision?: string | null;
+  geo_precision?: GeoPrecision | string | null;
+  /** True when leads.project_research has a row. */
+  has_research?: boolean;
+  /** Cautious timing label from lib/timing.ts. */
+  timing_label?: string;
 }
+
 export interface Project extends ProjectRow {
   estimated_cost: string | number | null;
   scope_of_work: string | null;
   owner_name: string | null;
   owner_contact_name: string | null;
   owner_phone: string | null;
+  owner_address: string | null;
   tenant_name: string | null;
   tenant_contact_name: string | null;
   tenant_phone: string | null;
+  tenant_address: string | null;
   design_firm_name: string | null;
   design_firm_phone: string | null;
+  design_firm_address: string | null;
+  filer_contact_name: string | null;
   project_url: string | null;
 }
+
+export interface ProjectDetail extends Project {
+  research: ResearchView | null;
+}
+
+export interface CoverageCounts {
+  address: number;
+  approximate: number;
+  unknown: number;
+  /** Projects matching the other filters whose location is unknown (inside or outside the result set). */
+  unknownPool: number;
+}
+
 export interface ProjectListResponse {
   projects: ProjectRow[];
   total: number;
@@ -41,7 +64,6 @@ export interface ProjectListResponse {
   pageSize: number;
   pages: number;
   latestFetch: string | null;
-  facets: { cities: string[]; counties: string[]; statuses: string[] };
-  /** Count per derived stage for the current filters (ignoring the stage filter). */
-  stageCounts?: Record<Stage, number>;
+  facets: { cities: string[]; counties: string[]; workTypes: string[] };
+  coverage: CoverageCounts;
 }

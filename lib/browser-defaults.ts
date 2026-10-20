@@ -1,32 +1,15 @@
-import { getSmartList } from './smart-lists.ts';
-import type { ProjectParamState } from './project-params.ts';
+import { listAvailable } from './browse-lists.ts';
+import { DEFAULT_OFFICE_ID, isBrowseOffice } from './offices.ts';
+import { FILTER_DEFAULTS, type Filters, type SortKey } from './query.ts';
 
-/** UI defaults for the project browser (may differ from API parseFilters defaults). */
-export function browserDefaults(listId?: string): ProjectParamState {
-  const list = listId ? getSmartList(listId) : undefined;
-  return {
-    coverage: 'all',
-    office: list ? (list.defaultOffice ?? 'texas') : 'all',
-    view: 'all',
-    q: '',
-    city: '',
-    county: '',
-    status: '',
-    stage: '',
-    completionFrom: '',
-    completionTo: '',
-    registeredFrom: '',
-    registeredTo: '',
-    sort: list?.defaultSort ?? (list ? 'completion_date' : 'registration_date'),
-    direction: list?.defaultDirection ?? (list ? 'asc' : 'desc'),
-    page: 1,
-    pageSize: 50,
-    upcoming: Boolean(list?.upcomingOnlyDefault),
-    hidden: false,
-    // Smart lists default to distance coverage (list.defaultRadius, else 60 mi, of selected office / any office when All Texas).
-    scope: list ? 'radius' : 'territory',
-    radius: list?.defaultRadius ?? 60,
-  };
+/** UI defaults. All Projects, Data Centers, and All Texas open on newest filed. Bryan Priority opens on rank. */
+export function browserDefaults(options?: { office?: string; list?: string }): Filters {
+  const requested = options?.office && isBrowseOffice(options.office) ? options.office : DEFAULT_OFFICE_ID;
+  const requestedList = options?.list || '';
+  const list = listAvailable(requested, requestedList) ? requestedList : '';
+  const base: Filters = { ...FILTER_DEFAULTS, office: requested, list };
+  if (list === 'bryan-priority') return { ...base, sort: 'rank', direction: 'asc' };
+  return base;
 }
 
 export function sortMetaLabel(sort: string, direction: 'asc' | 'desc'): string {
@@ -34,19 +17,26 @@ export function sortMetaLabel(sort: string, direction: 'asc' | 'desc'): string {
     estimated_cost: 'est. cost',
     registration_date: 'filed date',
     completion_date: 'planned finish',
+    start_date: 'planned start',
     project_name: 'project name',
     location_address: 'address',
-    current_status: 'state status',
-    stage: 'stage',
     distance: 'distance',
     rank: 'priority rank',
+    timing: 'timing',
   };
   const name = labels[sort] || sort;
-  if (sort === 'estimated_cost') return `sorted by ${name} (${direction === 'desc' ? 'highest first' : 'lowest first'})`;
-  if (sort === 'rank') return `sorted by ${name} (${direction === 'asc' ? 'best first' : 'lowest first'})`;
-  if (sort === 'distance') return `sorted by ${name} (${direction === 'asc' ? 'nearest first' : 'farthest first'})`;
-  if (sort === 'completion_date') return `sorted by ${name} (${direction === 'asc' ? 'soonest first' : 'latest first'})`;
-  if (sort === 'stage') return `sorted by ${name} (${direction === 'asc' ? 'not started → built' : 'built → not started'})`;
-  if (sort.endsWith('_date')) return `sorted by ${name} (${direction === 'desc' ? 'newest first' : 'oldest first'})`;
-  return `sorted by ${name} (${direction === 'asc' ? 'A→Z' : 'Z→A'})`;
+  let how: string;
+  if (sort === 'estimated_cost') how = direction === 'desc' ? 'highest first' : 'lowest first';
+  else if (sort === 'rank') how = direction === 'asc' ? 'best first' : 'lowest first';
+  else if (sort === 'distance') how = direction === 'asc' ? 'nearest first' : 'farthest first';
+  else if (sort === 'timing') how = direction === 'asc' ? 'soonest planned dates first' : 'state status first';
+  else if (sort === 'completion_date' || sort === 'start_date') how = direction === 'asc' ? 'soonest first' : 'latest first';
+  else if (sort.endsWith('_date')) how = direction === 'desc' ? 'newest first' : 'oldest first';
+  else how = direction === 'asc' ? 'A→Z' : 'Z→A';
+  return `Sorted by ${name} (${how})`;
+}
+
+export function defaultSortFor(office: string, list: string): { sort: SortKey; direction: 'asc' | 'desc' } {
+  const defaults = browserDefaults({ office, list });
+  return { sort: defaults.sort, direction: defaults.direction };
 }

@@ -5,6 +5,7 @@ import { parseProspectFilters,type ProspectFilters,type ProspectResponse,type Pr
 import { formatDate,formatMoney } from '@/lib/format';
 import { Icon } from './icons';
 import { ProspectModal } from './prospect-modal';
+import { SiteHeader } from './site-header';
 const defaults:ProspectFilters={role:'tenant',office:'all',coverage:'all',window:'six',q:'',sort:'next_completion',direction:'asc',page:1};
 function readFilters(){try{const f=parseProspectFilters(new URLSearchParams(window.location.search));return getOffice(f.office)?f:defaults;}catch{return defaults;}}
 export function ProspectBrowser(){
@@ -18,10 +19,9 @@ export function ProspectBrowser(){
   function changeOffice(id:OfficeId){change({office:id,coverage:'all'});setData(null);setSelected(null);}
   function sort(key:ProspectFilters['sort']){change({sort:key,direction:filters.sort===key?(filters.direction==='asc'?'desc':'asc'):(key==='total_value'||key==='project_count'?'desc':'asc')});}
   const office=getOffice(filters.office)!;
-  const projectHref=`/?${new URLSearchParams({office:filters.office,coverage:filters.coverage})}`;
   const names=filters.role==='tenant'?'Tenants':'Owners';
   function heading(label:string,key:ProspectFilters['sort']){return <th scope="col" aria-sort={filters.sort===key?(filters.direction==='asc'?'ascending':'descending'):'none'}><button className="sort-button" onClick={()=>sort(key)}>{label}<Icon name={filters.sort===key?'down':'sort'} size={13} style={filters.sort===key&&filters.direction==='asc'?{transform:'rotate(180deg)'}:undefined}/></button></th>;}
-  return <div className="app-shell prospect-shell"><header className="app-header"><a className="brand" href="/" aria-label="CTWP home"><img src="/ctwp-logo.png" alt="CTWP" width="290" height="62"/></a><span className="header-divider"/><span className="product-name">Project Explorer</span><nav className="browser-mode" aria-label="Browse mode"><a href={projectHref}>Projects</a><a href="/lists">Smart Lists</a><a href="/prospects" className="active" aria-current="page">Prospects</a></nav></header>
+  return <div className="app-shell prospect-shell"><SiteHeader />
   <nav className="office-nav" aria-label="CTWP offices">{COVERAGE_VIEWS.map(o=><button key={o.id} className={filters.office===o.id?'active':''} aria-current={filters.office===o.id?'page':undefined} onClick={()=>changeOffice(o.id)}>{o.name}</button>)}</nav>
   <main className="workspace"><div className="page-heading"><div><h1>{office.name}</h1><p>Find the people behind the projects</p></div><div className="heading-actions"><span className="territory-label">{names} · project-linked contacts</span><button className="button" disabled={loading} onClick={()=>setRetry(n=>n+1)}><Icon name="refresh" size={15}/>Reload</button></div></div>
   <div className="view-bar"><div className="saved-views" role="tablist" aria-label="Prospect type">{(['tenant','owner'] as const).map(role=><button key={role} role="tab" aria-selected={filters.role===role} className={filters.role===role?'active':''} onClick={()=>{change({role});setSelected(null);}}>{role==='tenant'?'Tenants':'Owners'}</button>)}</div><span className="result-count" aria-live="polite">{loading?'Loading prospects…':error?'Prospects unavailable':`${data?.total.toLocaleString()||0} ${names.toLowerCase()}`}</span></div>

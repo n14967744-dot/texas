@@ -1,7 +1,7 @@
 import type { ProjectListResponse } from './types.ts';
 
 const MEMORY = new Map<string, ProjectListResponse>();
-const STORAGE_PREFIX = 'ctwp-projects:v1:';
+const STORAGE_PREFIX = 'ctwp-projects:v2:';
 const MAX_SESSION_ENTRIES = 40;
 
 function storageKey(query: string) {

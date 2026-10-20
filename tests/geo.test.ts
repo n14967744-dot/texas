@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { haversineMiles, projectsWithinRadius, distanceToOffice } from '../lib/geo.ts';
-import { getOfficeBranch, OFFICES } from '../lib/offices.ts';
+import { haversineMiles, projectsWithinRadius } from '../lib/geo.ts';
+import { COORD_SOURCE, getOfficeBranch, OFFICES } from '../lib/offices.ts';
 import { parseFilters, buildWhere } from '../lib/query.ts';
-import { buildProjectSearchParams, API_PROJECT_PARAM_DEFAULTS } from '../lib/project-params.ts';
+import { filtersToSearchParams } from '../lib/project-params.ts';
 import { browserDefaults } from '../lib/browser-defaults.ts';
 import { hiddenProjectNumbers } from '../lib/smart-list-review.ts';
 
@@ -18,10 +18,11 @@ test('haversine: zero distance for same point', () => {
   assert.equal(haversineMiles(31.5, -97.2, 31.5, -97.2), 0);
 });
 
-test('each CTWP office has coordinates from Census city centroids', () => {
+test('each CTWP office has a street address and Census Geocoder coordinates', () => {
   for (const office of OFFICES) {
     assert.ok(Number.isFinite(office.lat) && Number.isFinite(office.lng));
-    assert.match(office.coordSource, /Census 2024/);
+    assert.equal(office.coordSource, COORD_SOURCE);
+    assert.match(office.address, /TX \d{5}/);
   }
 });
 
@@ -39,36 +40,27 @@ test('hidden projects can still be distance-ranked (filtering is SQL-side)', () 
   assert.ok([...hidden].length > 0);
 });
 
-test('smart list defaults serialize scope=radius and radius=60', () => {
-  const defaults = browserDefaults('data-centers');
-  assert.equal(defaults.scope, 'radius');
-  assert.equal(defaults.radius, 60);
-  const query = buildProjectSearchParams(defaults, { listId: 'data-centers' });
-  const params = new URLSearchParams(query);
-  assert.equal(params.get('scope'), 'radius');
-  assert.equal(params.get('radius'), '60');
-  assert.equal(params.get('sort'), 'estimated_cost');
-  assert.equal(params.get('direction'), 'desc');
-  const filters = parseFilters(params);
-  assert.equal(filters.scope, 'radius');
-  assert.equal(filters.radius, 60);
+test('data-centers defaults to a 25 mile straight-line radius', () => {
+  const defaults = browserDefaults({ office: 'waco', list: 'data-centers' });
+  assert.equal(defaults.radius, 25);
+  const params = filtersToSearchParams(defaults);
+  assert.equal(params.get('radius'), null);
+  assert.equal(params.get('sort'), null);
+  assert.equal(params.get('direction'), null);
+  assert.equal(parseFilters(params).sort, 'registration_date');
+  assert.equal(parseFilters(params).direction, 'desc');
+  assert.equal(parseFilters(params).radius, 25);
 });
 
-test('radius scope without list is rejected; distance sort requires radius', () => {
-  assert.throws(() => parseFilters(new URLSearchParams({ scope: 'radius' })));
-  assert.throws(() => parseFilters(new URLSearchParams({ list: 'data-centers', sort: 'distance' })));
-  const ok = parseFilters(new URLSearchParams({
-    list: 'data-centers', scope: 'radius', radius: '60', sort: 'distance', direction: 'asc', office: 'waco',
-  }));
-  assert.equal(ok.sort, 'distance');
-  assert.equal(ok.scope, 'radius');
-});
-
-test('territory mode still applies office county restriction in SQL', () => {
+test('distance sort is straight-line miles from the office address', () => {
   const filters = parseFilters(new URLSearchParams({
-    list: 'data-centers', office: 'waco', scope: 'territory', upcoming: '1',
+    list: 'data-centers', radius: '50', sort: 'distance', direction: 'asc', office: 'waco',
   }));
-  const q = buildWhere(filters, ['McLennan'], '2026-10-19');
-  assert.ok(q.where.includes('location_county IN'));
-  assert.ok(q.params.includes('McLennan'));
+  assert.equal(filters.sort, 'distance');
+  const query = buildWhere(filters, '2026-10-19');
+  assert.match(query.from, /3958\.8/);
+  assert.match(query.geoClause, /distance_mi <= /);
+  assert.ok(query.params.includes(31.529589));
+  assert.ok(query.params.includes(50));
+  assert.equal(query.where.includes('location_county IN'), false);
 });

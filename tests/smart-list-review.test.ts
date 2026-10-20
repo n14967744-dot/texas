@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SMART_LIST_REVIEW, getReviewEntry, hiddenProjectNumbers } from '../lib/smart-list-review.ts';
-import { buildWhere, parseFilters } from '../lib/query.ts';
-import { buildProjectSearchParams, API_PROJECT_PARAM_DEFAULTS } from '../lib/project-params.ts';
+import { buildWhere, FILTER_DEFAULTS, parseFilters } from '../lib/query.ts';
+import { filtersToSearchParams } from '../lib/project-params.ts';
 import { matchesSmartList, getSmartList } from '../lib/smart-lists.ts';
 
 const list = getSmartList('data-centers')!;
@@ -22,32 +22,31 @@ test('review registry has hide and review decisions for data-centers', () => {
 
 test('hidden projects are excluded from SQL unless hidden=1', () => {
   const base = parseFilters(new URLSearchParams({
-    list: 'data-centers', office: 'texas', upcoming: '0', sort: 'estimated_cost', direction: 'desc',
+    list: 'data-centers', office: 'texas', sort: 'estimated_cost', direction: 'desc',
   }));
   assert.equal(base.hidden, false);
-  const where = buildWhere(base, null, '2026-10-19');
+  const where = buildWhere(base, '2026-10-19');
   assert.ok(where.where.includes('project_number NOT IN'));
   assert.ok(where.params.includes('TABS2025007641'));
 
   const shown = parseFilters(new URLSearchParams({
-    list: 'data-centers', office: 'texas', upcoming: '0', hidden: '1', sort: 'estimated_cost', direction: 'desc',
+    list: 'data-centers', office: 'texas', hidden: '1', sort: 'estimated_cost', direction: 'desc',
   }));
   assert.equal(shown.hidden, true);
-  const whereShown = buildWhere(shown, null, '2026-10-19');
+  const whereShown = buildWhere(shown, '2026-10-19');
   assert.equal(whereShown.where.includes('project_number NOT IN'), false);
 });
 
 test('hidden=1 requires a smart list and serializes in params', () => {
   assert.throws(() => parseFilters(new URLSearchParams({ hidden: '1' })));
-  const query = buildProjectSearchParams({
-    ...API_PROJECT_PARAM_DEFAULTS,
+  const params = filtersToSearchParams({
+    ...FILTER_DEFAULTS,
     office: 'texas',
+    list: 'data-centers',
     sort: 'estimated_cost',
     direction: 'desc',
-    upcoming: true,
     hidden: true,
-  }, { listId: 'data-centers' });
-  const params = new URLSearchParams(query);
+  });
   assert.equal(params.get('hidden'), '1');
   assert.equal(params.get('list'), 'data-centers');
 });
