@@ -49,24 +49,24 @@ function scopeFilters(filters: Filters): Filters {
   };
 }
 
-function bindMore(params: (string | number)[]) {
-  return (value: string | number) => {
+function bindMore(params: (string | number | null)[]) {
+  return (value: string | number | null) => {
     params.push(value);
     return `$${params.length}`;
   };
 }
 
-function rankJoin(listId: string, bind: (value: string | number) => string): string {
+function rankJoin(listId: string, bind: (value: string | number | null) => string): string {
   const ranking = listId ? getRanking(listId) : undefined;
   if (!ranking?.ranked.length) return '';
-  const values = ranking.ranked.map((entry) => `(${bind(entry.projectNumber)}::text, ${bind(entry.rank)}::int)`).join(', ');
+  const values = ranking.ranked.map((entry) => `(${bind(entry.projectNumber)}::text, ${bind(entry.rank)}::int, ${bind(entry.callRank ?? null)}::int)`).join(', ');
   // The join key is not named project_number: that column already exists on located.
-  return `LEFT JOIN (VALUES ${values}) AS curated_rank(tabs_number, rank) ON curated_rank.tabs_number = located.project_number`;
+  return `LEFT JOIN (VALUES ${values}) AS curated_rank(tabs_number, rank, call_rank) ON curated_rank.tabs_number = located.project_number`;
 }
 
-function ordering(filters: Filters, params: (string | number)[], today: string) {
+function ordering(filters: Filters, params: (string | number | null)[], today: string) {
   const bind = bindMore(params);
-  const join = filters.sort === 'rank' ? rankJoin(filters.list, bind) : '';
+  const join = filters.sort === 'rank' || filters.sort === 'call' ? rankJoin(filters.list, bind) : '';
   const todayParam = filters.sort === 'timing' ? bind(today) : `''`;
   return { join, order: projectOrderBy(filters, todayParam) };
 }
@@ -142,7 +142,7 @@ export async function loadProjectList(filters: Filters): Promise<ProjectListResp
     };
   }
 
-  const params = [...compiled.params];
+  const params: (string | number | null)[] = [...compiled.params];
   const { join, order } = ordering(filters, params, today);
   const bind = bindMore(params);
   const limit = bind(filters.pageSize);
@@ -181,7 +181,7 @@ export async function loadProjectCsv(filters: Filters): Promise<string> {
   if (!isBrowseOffice(filters.office)) throw new FilterError('Unknown office.');
   const today = businessToday();
   const compiled = buildWhere(filters, today);
-  const params = [...compiled.params];
+  const params: (string | number | null)[] = [...compiled.params];
   const { join, order } = ordering(filters, params, today);
   const result = await readQueries<ProjectRow>([{
     query: `SELECT ${LIST_COLUMNS} FROM ${compiled.from} ${join} WHERE ${compiled.where} ORDER BY ${order} LIMIT 60000`,

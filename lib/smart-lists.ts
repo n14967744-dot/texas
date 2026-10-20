@@ -31,8 +31,8 @@ export interface SmartListDefinition {
   fields?: readonly SmartListField[];
   /** When true, the list page starts with the upcoming-only toggle on. */
   upcomingOnlyDefault?: boolean;
-  /** Initial sort column (must be a /api/projects sort key; `rank` needs a curated list). */
-  defaultSort?: 'estimated_cost' | 'registration_date' | 'completion_date' | 'project_name' | 'location_address' | 'current_status' | 'rank';
+  /** Initial sort column (must be a /api/projects sort key; `rank` and `call` need a curated list). */
+  defaultSort?: 'estimated_cost' | 'registration_date' | 'completion_date' | 'project_name' | 'location_address' | 'current_status' | 'rank' | 'call';
   /** Initial sort direction. */
   defaultDirection?: 'asc' | 'desc';
   /** Office tab the list opens on (office id from lib/offices.ts). Defaults to All Texas. */

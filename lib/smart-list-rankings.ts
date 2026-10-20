@@ -29,6 +29,10 @@ export type SmartListRankingEntry = {
   tier: PriorityTier;
   /** One-line plain-English reason, built only from TABS data. */
   note: string;
+  callRank?: number;
+  askFor?: string;
+  phone?: string;
+  reachability?: 'high' | 'med' | 'low';
 };
 
 export type SmartListRankingHidden = {

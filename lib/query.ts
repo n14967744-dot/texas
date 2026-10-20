@@ -7,7 +7,7 @@ import { hasRanking } from './smart-list-rankings.ts';
 import { presetRange, type FiledPreset, type FinishPreset, type StartPreset } from './date-presets.ts';
 import { locatedFromSql, type SqlBind } from './location-sql.ts';
 
-export type SqlQuery = { query: string; params: (string | number)[] };
+export type SqlQuery = { query: string; params: (string | number | null)[] };
 
 export const SORTS = {
   estimated_cost: 'estimated_cost',
@@ -18,6 +18,7 @@ export const SORTS = {
   location_address: 'location_address',
   distance: 'distance',
   rank: 'rank',
+  call: 'call',
   timing: 'timing',
 } as const;
 
@@ -171,7 +172,7 @@ export function parseFilters(params: URLSearchParams): Filters {
   const hidden = flagParam(params, 'hidden', 'hidden filter');
   if (hidden && !list) throw new FilterError('Show hidden is only available on a list.');
   if (hidden && hiddenProjectNumbers(list).length === 0) throw new FilterError('Show hidden is only available on a list with hidden entries.');
-  if (sort === 'rank' && !(list && hasRanking(list))) throw new FilterError('Rank sort requires a ranked list.');
+  if ((sort === 'rank' || sort === 'call') && !(list && hasRanking(list))) throw new FilterError(`${sort === 'rank' ? 'Rank' : 'Call'} sort requires a ranked list.`);
 
   return {
     office,

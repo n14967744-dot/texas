@@ -38,6 +38,14 @@ export function ProjectListMarks({
   if (!entry && !review) return null;
   const chip = entry ? <PriorityChip entry={entry} /> : null;
   const note = entry?.note ? <PriorityNote note={entry.note} clamp={placement === 'row'} /> : null;
+  const callInfo = entry?.callRank != null ? (
+    <span className="priority-call-info">
+      Call #{entry.callRank}
+      {entry.askFor && <> · Ask for {entry.askFor}</>}
+      {entry.phone && <> · <a href={`tel:+1${entry.phone.replace(/\D/g, '')}`} onClick={(event) => event.stopPropagation()}>{entry.phone}</a></>}
+      {entry.reachability && <> · {entry.reachability}</>}
+    </span>
+  ) : null;
   const badges = review ? <ReviewBadges entry={review} /> : null;
   if (placement === 'overview') {
     return (
@@ -45,9 +53,10 @@ export function ProjectListMarks({
         {entry && <h3>Priority</h3>}
         {chip}
         {note}
+        {callInfo}
         {badges}
       </section>
     );
   }
-  return <>{chip}{badges}{note}</>;
+  return <>{chip}{badges}{note}{callInfo}</>;
 }

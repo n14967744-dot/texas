@@ -11,6 +11,7 @@ export function projectOrderBy(filters: Pick<Filters, 'sort' | 'direction'>, tod
   const tie = 'project_number ASC';
   if (filters.sort === 'distance') return `distance_mi ${dir} NULLS LAST, ${tie}`;
   if (filters.sort === 'rank') return `curated_rank.rank ${dir} NULLS LAST, ${tie}`;
+  if (filters.sort === 'call') return `curated_rank.call_rank ${dir} NULLS LAST, curated_rank.rank ASC NULLS LAST, ${tie}`;
   if (filters.sort === 'timing') {
     return `${timingBucketSql(todayParam)} ${dir}, ${timingDateSql(todayParam)} ${dir} NULLS LAST, ${tie}`;
   }

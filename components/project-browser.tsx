@@ -32,6 +32,7 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'project_name', label: 'Project name' },
   { key: 'location_address', label: 'Address' },
   { key: 'rank', label: 'Priority rank' },
+  { key: 'call', label: 'Call order' },
 ];
 
 export function ProjectBrowser({
@@ -146,7 +147,7 @@ export function ProjectBrowser({
                 state.patch({ sort, direction });
               }}
             >
-              {SORT_OPTIONS.filter((option) => option.key !== 'rank' || hasRanking(filters.list)).map((option) => (
+              {SORT_OPTIONS.filter((option) => (option.key !== 'rank' && option.key !== 'call') || hasRanking(filters.list)).map((option) => (
                 <optgroup key={option.key} label={option.label}>
                   <option value={`${option.key}:asc`}>{option.label}, ascending</option>
                   <option value={`${option.key}:desc`}>{option.label}, descending</option>

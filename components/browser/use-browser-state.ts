@@ -10,7 +10,7 @@ import type { Filters, SortKey } from '@/lib/query';
 import { hiddenProjectNumbers } from '@/lib/smart-list-review';
 import type { ProjectListResponse, ProjectRow } from '@/lib/types';
 
-const ASC_FIRST = new Set<SortKey>(['project_name', 'location_address', 'distance', 'rank', 'timing', 'start_date', 'completion_date']);
+const ASC_FIRST = new Set<SortKey>(['project_name', 'location_address', 'distance', 'rank', 'call', 'timing', 'start_date', 'completion_date']);
 
 export function useBrowserState(initialFilters: Filters, initialData: ProjectListResponse | null) {
   const [filters, setFilters] = useState(initialFilters);
@@ -138,7 +138,7 @@ export function useBrowserState(initialFilters: Filters, initialData: ProjectLis
       const list = listAvailable(office, current.list) ? current.list : '';
       let sort = current.sort;
       let direction = current.direction;
-      if (list !== current.list && sort === 'rank') {
+      if (list !== current.list && (sort === 'rank' || sort === 'call')) {
         const defaults = browserDefaults({ office, list });
         sort = defaults.sort;
         direction = defaults.direction;
@@ -152,8 +152,8 @@ export function useBrowserState(initialFilters: Filters, initialData: ProjectLis
   function setList(list: string) {
     setFilters((current) => {
       const defaults = browserDefaults({ office: current.office, list });
-      const sort = list === 'bryan-priority' ? 'rank' as const : (current.sort === 'rank' ? defaults.sort : current.sort);
-      const direction = list === 'bryan-priority' ? 'asc' as const : (current.sort === 'rank' ? defaults.direction : current.direction);
+      const sort = list === 'bryan-priority' ? 'rank' as const : (current.sort === 'rank' || current.sort === 'call' ? defaults.sort : current.sort);
+      const direction = list === 'bryan-priority' ? 'asc' as const : (current.sort === 'rank' || current.sort === 'call' ? defaults.direction : current.direction);
       const hidden = list && hiddenProjectNumbers(list).length > 0 ? current.hidden : false;
       return { ...current, list, sort, direction, hidden, page: 1 };
     });

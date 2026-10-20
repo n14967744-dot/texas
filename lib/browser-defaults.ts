@@ -22,12 +22,14 @@ export function sortMetaLabel(sort: string, direction: 'asc' | 'desc'): string {
     location_address: 'address',
     distance: 'distance',
     rank: 'priority rank',
+    call: 'call order',
     timing: 'timing',
   };
   const name = labels[sort] || sort;
   let how: string;
   if (sort === 'estimated_cost') how = direction === 'desc' ? 'highest first' : 'lowest first';
   else if (sort === 'rank') how = direction === 'asc' ? 'best first' : 'lowest first';
+  else if (sort === 'call') how = direction === 'asc' ? 'first to last' : 'last to first';
   else if (sort === 'distance') how = direction === 'asc' ? 'nearest first' : 'farthest first';
   else if (sort === 'timing') how = direction === 'asc' ? 'soonest planned dates first' : 'state status first';
   else if (sort === 'completion_date' || sort === 'start_date') how = direction === 'asc' ? 'soonest first' : 'latest first';
