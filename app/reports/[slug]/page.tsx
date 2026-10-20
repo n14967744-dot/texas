@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { ReportHeader } from '@/components/report-header';
 import { ReportTable } from '@/components/report-table';
+import { TimingDisplay } from '@/components/timing-display';
 import { formatDate } from '@/lib/format';
 import { loadRankingReport, type ReportRow } from '@/lib/reports';
 import { browseListHref } from '@/lib/redirects';
@@ -76,7 +77,7 @@ export default async function ReportPage({ params }: { params: Promise<{ slug: s
 
         <section className="report-section" aria-labelledby="start-here">
           <h2 id="start-here">Start here: Hot ({hot.length})</h2>
-          <p className="report-lede">Finishing within about six months (or just past their planned finish and not closed), strong fit for copiers, MFPs and managed print, and at least $250k. Click a project to open its details.</p>
+          <p className="report-lede">Ranked from planned dates at the snapshot: finish within about six months (or just past and not closed), strong fit for copiers, MFPs and managed print, and at least $250k. Timing labels reflect the current filing. Click a project to open its details.</p>
           <ReportTable rows={hot} listId={ranking.listId} />
         </section>
 
@@ -88,7 +89,7 @@ export default async function ReportPage({ params }: { params: Promise<{ slug: s
                 <li key={row.projectNumber}>
                   <span className="report-intown-rank">#{row.rank}</span>
                   <a href={browseListHref(ranking.listId, { q: row.projectNumber, open: row.projectNumber })}>{row.name || row.projectNumber}</a>
-                  <span className="muted"> · {row.city} · {row.completion ? formatDate(row.completion) : 'date not listed'}</span>
+                  <span className="muted"> · {row.city} · <TimingDisplay info={row.timing} /></span>
                 </li>
               ))}
             </ul>
@@ -96,12 +97,12 @@ export default async function ReportPage({ params }: { params: Promise<{ slug: s
         )}
 
         <details className="report-section report-details">
-          <summary><h2>Warm ({warm.length})</h2><span className="muted">Good timing with reasonable fit, or under construction with strong fit, or large strong-fit jobs.</span></summary>
+          <summary><h2>Warm ({warm.length})</h2><span className="muted">Good planned timing with reasonable fit, a passed planned start with strong fit, or large strong-fit jobs.</span></summary>
           <ReportTable rows={warm} listId={ranking.listId} compact />
         </details>
 
         <details className="report-section report-details">
-          <summary><h2>Pipeline ({pipeline.length})</h2><span className="muted">Later timing or lighter fit. Worth tracking.</span></summary>
+          <summary><h2>Pipeline ({pipeline.length})</h2><span className="muted">Later timing, lighter fit, or Needs drive-by. Still worth checking.</span></summary>
           <ReportTable rows={pipeline} listId={ranking.listId} compact />
         </details>
 

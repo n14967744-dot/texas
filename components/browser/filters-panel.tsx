@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { FILED_PRESETS, FINISH_PRESETS, START_PRESETS } from '@/lib/date-presets';
 import { ALL_TEXAS_ID, getOfficeBranch } from '@/lib/offices';
 import { DEFAULT_RADIUS, RADIUS_PRESETS, type Filters } from '@/lib/query';
-import { hiddenProjectNumbers } from '@/lib/smart-list-review';
 import { SearchableSelect } from './searchable-select';
 import { UnknownLocationControl } from './unknown-location';
 
@@ -34,7 +33,6 @@ export function FiltersPanel({
   const texas = filters.office === ALL_TEXAS_ID;
   const customRadius = !(RADIUS_PRESETS as readonly number[]).includes(filters.radius);
   const [customOn, setCustomOn] = useState(customRadius);
-  const canHide = Boolean(filters.list && hiddenProjectNumbers(filters.list).length > 0);
 
   useEffect(() => {
     if ((RADIUS_PRESETS as readonly number[]).includes(filters.radius)) setCustomOn(false);
@@ -235,16 +233,14 @@ export function FiltersPanel({
           </div>
         </fieldset>
 
-        {canHide && (
-          <details className="filter-secondary">
-            <summary>More options</summary>
-            <label className="check-label">
-              <input type="checkbox" checked={filters.hidden} onChange={(event) => onChange({ hidden: event.target.checked })} />
-              Show hidden
-            </label>
-            <p className="fine-print">Hidden filings stay out of the list until this is on. Each one keeps its review note.</p>
-          </details>
-        )}
+        <details className="filter-secondary">
+          <summary>More options</summary>
+          <label className="check-label">
+            <input type="checkbox" checked={filters.hidden} onChange={(event) => onChange({ hidden: event.target.checked })} />
+            Show hidden
+          </label>
+          <p className="fine-print">Shows projects hidden by field-note dispositions or list reviews. Their notes stay on file.</p>
+        </details>
       </div>
       <div className="filters-footer">
         <button type="button" className="text-button" onClick={onClear}>Clear filters</button>

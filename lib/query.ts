@@ -6,6 +6,7 @@ import { hiddenProjectNumbers } from './smart-list-review.ts';
 import { hasRanking } from './smart-list-rankings.ts';
 import { presetRange, type FiledPreset, type FinishPreset, type StartPreset } from './date-presets.ts';
 import { locatedFromSql, type SqlBind } from './location-sql.ts';
+import type { HereLocation } from './here-location.ts';
 
 export type SqlQuery = { query: string; params: (string | number)[] };
 
@@ -17,6 +18,7 @@ export const SORTS = {
   project_name: 'project_name',
   location_address: 'location_address',
   distance: 'distance',
+  here: 'here_mi',
   rank: 'rank',
   timing: 'timing',
 } as const;
@@ -49,7 +51,7 @@ export interface Filters {
   filedPreset: FiledPreset | '';
   registeredFrom: string;
   registeredTo: string;
-  /** Curated / reviewed lists only. */
+  /** Include both disposition-hidden projects and curated review hides. */
   hidden: boolean;
   sort: SortKey;
   direction: 'asc' | 'desc';
@@ -114,6 +116,7 @@ function costParam(params: URLSearchParams, key: string): number | null {
   return value;
 }
 
+/** Extra params are ignored. That includes the retired `stage` filter, so old links still open. */
 export function parseFilters(params: URLSearchParams): Filters {
   const sort = params.get('sort') || FILTER_DEFAULTS.sort;
   const direction = params.get('direction') || FILTER_DEFAULTS.direction;
@@ -169,8 +172,6 @@ export function parseFilters(params: URLSearchParams): Filters {
   const includeNoCost = flagParam(params, 'noCost', 'cost option');
   const includeUnknown = flagParam(params, 'unknown', 'unknown location option');
   const hidden = flagParam(params, 'hidden', 'hidden filter');
-  if (hidden && !list) throw new FilterError('Show hidden is only available on a list.');
-  if (hidden && hiddenProjectNumbers(list).length === 0) throw new FilterError('Show hidden is only available on a list with hidden entries.');
   if (sort === 'rank' && !(list && hasRanking(list))) throw new FilterError('Rank sort requires a ranked list.');
 
   return {
@@ -202,11 +203,7 @@ export function parseFilters(params: URLSearchParams): Filters {
   };
 }
 
-export function businessToday(now = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
-  const part = (type: string) => parts.find((item) => item.type === type)!.value;
-  return `${part('year')}-${part('month')}-${part('day')}`;
-}
+export { businessToday } from './timing.ts';
 
 const SEARCH_FIELDS = [
   'project_name', 'facility_name', 'scope_of_work', 'location_address', 'location_city', 'location_county',
@@ -228,7 +225,7 @@ function pushRange(
   if (to) clauses.push(`${dateExpr(column)} <= ${bind(to)}::date`);
 }
 
-export type BuiltWhere = {
+export type CompiledWhere = {
   from: string;
   where: string;
   attributeWhere: string;
@@ -241,7 +238,7 @@ export type BuiltWhere = {
  * One WHERE for search, list, dates, cost, work type, place, and radius.
  * `from` is the located subquery (address, else city centroid, else county centroid).
  */
-export function buildWhere(filters: Filters, today: string): BuiltWhere {
+export function buildWhere(filters: Filters, today: string, here: HereLocation | null = null): CompiledWhere {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) throw new FilterError('Invalid business date.');
   if (!isBrowseOffice(filters.office)) throw new FilterError('Unknown office.');
   const params: (string | number)[] = [];
@@ -249,8 +246,13 @@ export function buildWhere(filters: Filters, today: string): BuiltWhere {
     params.push(value);
     return `$${params.length}`;
   };
-  const from = locatedFromSql(filters.office, bind);
+  const from = `(SELECT located.*, overlay.site_state, overlay.site_state_observed_at,
+      overlay.disposition, COALESCE(overlay.hidden, false) AS overlay_hidden
+    FROM ${locatedFromSql(filters.office, bind, here)}
+    LEFT JOIN leads.project_overlay overlay ON overlay.project_number = located.project_number
+  ) located`;
   const clauses: string[] = ['TRUE'];
+  if (!filters.hidden) clauses.push('overlay_hidden = false');
 
   if (filters.q) {
     const pattern = `%${filters.q.replace(/[\\%_]/g, '\\$&')}%`;

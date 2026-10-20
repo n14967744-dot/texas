@@ -162,17 +162,16 @@ table.report-table{min-width:0;width:100%;table-layout:auto}.report-table th:nth
 /* Project table: class-based column widths (Priority / Distance columns are optional). */
 table.projects-table{min-width:1500px}
 .projects-table th:nth-child(n){width:auto}
-.projects-table th.col-priority{width:6%}.projects-table th.col-project{width:19%}.projects-table th.col-address{width:14%}.projects-table th.col-scope{width:17%}.projects-table th.col-cost{width:8%}.projects-table th.col-distance{width:6%}.projects-table th.col-status{width:9%}.projects-table th.col-stage{width:8%}.projects-table th.col-finish{width:8%}.projects-table th.col-filed{width:7%}.projects-table th.col-arrow{width:2%}
+.projects-table th.col-priority{width:6%}.projects-table th.col-project{width:19%}.projects-table th.col-address{width:14%}.projects-table th.col-scope{width:17%}.projects-table th.col-cost{width:8%}.projects-table th.col-distance{width:6%}.projects-table th.col-status{width:9%}.projects-table th.col-finish{width:8%}.projects-table th.col-filed{width:7%}.projects-table th.col-arrow{width:2%}
 .projects-table .status-badge{white-space:normal}
 .relative-date{display:block;margin-top:2px;font-size:11px;color:var(--muted);font-weight:500}
-.stage-chip{display:inline-block;border:1px solid;border-radius:999px;font-size:10.5px;font-weight:600;line-height:1.35;padding:3px 8px;white-space:normal;max-width:100%;cursor:help}
-.stage-chip.not_started{background:#f3f1fa;border-color:#d3cbe8;color:#56478a}
-.stage-chip.under_construction{background:#fff6e8;border-color:#e6c48a;color:#8a5a12}
-.stage-chip.finishing_soon{background:#edf7f2;border-color:#9fd0b6;color:#256b4c}
-.stage-chip.past_due{background:#f8eef0;border-color:#e2b7bf;color:#8a2438}
-.stage-chip.built{background:#f1f4f8;border-color:#cbd5e3;color:#3d5370}
-.stage-chip.unknown{background:#f5f5f7;border-color:#dddfe5;color:#737b8c}
-.report-stage{min-width:96px}
+.timing-display{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px 6px}
+.timing-tag{display:inline-block;border:1px solid;border-radius:999px;font-size:10.5px;font-weight:600;line-height:1.35;padding:3px 8px;white-space:normal;max-width:100%;cursor:help}
+.timing-tag.behind{background:#fff6e8;border-color:#e6c48a;color:#8a5a12}
+.timing-tag.stale{background:#f8eef0;border-color:#e2b7bf;color:#8a2438}
+.timing-tag.drive_by{background:#f1f4f8;border-color:#cbd5e3;color:#3d5370}
+.timing-tag.plans{background:#f3f1fa;border-color:#d3cbe8;color:#56478a}
+.report-timing{min-width:130px}
 
 /* Office-first project browser */
 .header-end{display:flex;align-items:center;gap:16px;margin-left:auto}
@@ -264,6 +263,26 @@ table.browse-table{min-width:0;width:100%;table-layout:auto}
 .priority-chip.pipeline{background:#eef3f8;border-color:#b7c6d6;color:#3a5270}
 .priority-note{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:help;font-weight:500}
 .priority-note-full{display:block;-webkit-line-clamp:unset;overflow:visible;cursor:auto}
+
+.location-map-controls{display:flex;flex-shrink:0;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.location-map-controls .button,.view-toggle .button{min-height:44px}
+.view-toggle{display:flex;gap:4px}
+.view-toggle button[aria-pressed="true"]{background:var(--navy);color:#fff;border-color:var(--navy)}
+.browser-sort{display:flex;flex-shrink:0;gap:10px;align-items:center;margin:8px 14px}
+.browser-sort select{min-height:44px;max-width:280px}
+.project-map-panel{background:#fff}
+.project-map{height:70vh;min-height:320px;max-height:850px;z-index:0}
+.map-message{padding:10px 14px;font-size:13px}
+.map-legend{display:flex;flex-wrap:wrap;gap:6px 16px;padding:10px 14px;font-size:12px;color:#4b5b70}
+.map-legend span{display:inline-flex;align-items:center;gap:5px}
+.map-legend i{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid #fff;flex-shrink:0}
+.map-legend .approx-pin{border:2px dashed #475569;background:transparent}
+.project-map .leaflet-interactive:focus-visible{outline:3px solid var(--focus)}
+@media(min-width:801px){
+  .project-map-panel{display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto}
+  .project-map{flex:1;min-height:260px;height:auto}
+  .map-legend,.map-message{flex-shrink:0}
+}
 .list-overview{margin:0 0 18px}
 .list-overview .priority-chip{margin:0 0 8px 0}
 .unknown-note{margin:0;color:#6c798d}

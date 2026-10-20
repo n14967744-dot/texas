@@ -6,10 +6,13 @@ import { Icon } from '../icons';
 import { ScopePreview } from '../scope-preview';
 import { DistanceCell } from './distance-cell';
 import { ProjectListMarks } from './project-list-marks';
+import { ProjectTiming } from '../timing-display';
 
 export function ResultsCards({
   projects,
   nearestOffice,
+  officeName,
+  locationEnabled,
   listId,
   showSkeleton,
   error,
@@ -18,6 +21,8 @@ export function ResultsCards({
 }: {
   projects: ProjectRow[];
   nearestOffice: boolean;
+  officeName: string;
+  locationEnabled: boolean;
   listId: string;
   showSkeleton: boolean;
   error: string;
@@ -64,7 +69,7 @@ export function ResultsCards({
               <span className="project-card-title">
                 {name}
                 {project.has_research && <span className="researched-badge">Researched</span>}
-                <ProjectListMarks listId={listId} projectNumber={project.project_number} placement="row" />
+                <ProjectListMarks listId={listId} projectNumber={project.project_number} timingTone={project.timing_tone} placement="row" />
               </span>
               <span className="secondary-line">{project.project_number}</span>
               <span className="project-card-address">{[project.location_address, project.location_city].filter(Boolean).join(', ') || 'Address not listed'}</span>
@@ -72,8 +77,8 @@ export function ResultsCards({
             <dl className="project-card-facts">
               <div><dt>Scope</dt><dd><ScopePreview scope={project.scope_of_work} /></dd></div>
               <div><dt>Est. cost</dt><dd>{formatMoney(project.estimated_cost)}</dd></div>
-              <div><dt>{nearestOffice ? 'Nearest office' : 'Distance'}</dt><dd><DistanceCell miles={project.distance_mi} precision={project.geo_precision} nearestOffice={nearestOffice} /></dd></div>
-              <div><dt>Timing</dt><dd>{project.timing_label || 'Timing not listed'}</dd></div>
+              <div><dt>{nearestOffice ? 'Nearest office' : 'Distance'}</dt><dd><DistanceCell miles={project.distance_mi} precision={project.geo_precision} nearestOffice={nearestOffice} hereMiles={project.here_mi} locationEnabled={locationEnabled} officeName={officeName} distanceOfficeId={project.distance_office_id} /></dd></div>
+              <div><dt>Timing</dt><dd><ProjectTiming project={project} /></dd></div>
               <div><dt>Planned start</dt><dd>{formatDate(project.start_date)}</dd></div>
               <div><dt>Planned finish</dt><dd>{formatDate(project.completion_date)}</dd></div>
             </dl>

@@ -16,12 +16,16 @@ Usage:
 
 Census batch geocoder: https://geocoding.geo.census.gov/geocoder/ (free, no key, <=10,000 rows/request).
 """
-import argparse, csv, io, json, os, re, sys, time, urllib.parse
-import requests
+import argparse, csv, http.client, io, json, os, re, sys, time, urllib.parse, urllib.request, uuid
 
 CENSUS_BATCH = 'https://geocoding.geo.census.gov/geocoder/locations/addressbatch'
 SOURCE = 'US Census Geocoder batch (Public_AR_Current)'
 GAZ_SOURCE = 'US Census 2024 Gazetteer (place/county internal point)'
+
+def post(url, body, headers, timeout):
+    request = urllib.request.Request(url, data=body, headers=headers, method='POST')
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return response.read().decode('utf-8-sig')
 
 def sql(queries, read_only=False):
     conn = os.environ['DATABASE_URL']
@@ -29,9 +33,11 @@ def sql(queries, read_only=False):
     headers = {'Neon-Connection-String': conn, 'Content-Type': 'application/json'}
     if read_only: headers['Neon-Batch-Read-Only'] = 'true'
     for attempt in range(4):
-        r = requests.post(f'https://{host}/sql', headers=headers, json={'queries': queries}, timeout=120)
-        if r.ok: return [res['rows'] for res in r.json()['results']]
-        if attempt == 3: raise SystemExit(f'SQL failed: {r.status_code} {r.text[:300]}')
+        try:
+            data = post(f'https://{host}/sql', json.dumps({'queries': queries}).encode(), headers, 120)
+            return [res['rows'] for res in json.loads(data)['results']]
+        except (OSError, http.client.HTTPException, ValueError, KeyError, TypeError):
+            if attempt == 3: raise RuntimeError('SQL failed after retries; response and credentials omitted.') from None
         time.sleep(3 * (attempt + 1))
 
 DDL = [
@@ -97,24 +103,37 @@ def census_batch(items):
     w = csv.writer(buf)
     for i, (street, city, zip_) in enumerate(items):
         w.writerow([i, street, city, 'TX', zip_])
-    for attempt in range(4):
+    boundary = 'census-' + uuid.uuid4().hex
+    body = (f'--{boundary}\r\nContent-Disposition: form-data; name="benchmark"\r\n\r\n'
+            f'Public_AR_Current\r\n--{boundary}\r\n'
+            'Content-Disposition: form-data; name="addressFile"; filename="a.csv"\r\n'
+            f'Content-Type: text/csv\r\n\r\n{buf.getvalue()}\r\n--{boundary}--\r\n').encode()
+    for attempt in range(3):
         try:
-            r = requests.post(CENSUS_BATCH, data={'benchmark': 'Public_AR_Current'},
-                              files={'addressFile': ('a.csv', buf.getvalue(), 'text/csv')}, timeout=1800)
-            if r.ok: break
-            print('census http', r.status_code, r.text[:200], file=sys.stderr)
-        except requests.RequestException as e:
-            print('census error', e, file=sys.stderr)
-        time.sleep(30 * (attempt + 1))
+            text = post(CENSUS_BATCH, body, {'Content-Type': f'multipart/form-data; boundary={boundary}'}, 120)
+            return parse_census(text, len(items))
+        except (OSError, http.client.HTTPException, csv.Error, ValueError):
+            print(f'Census request/response failed (attempt {attempt + 1}/3).', file=sys.stderr)
+        if attempt < 2: time.sleep(5 * (attempt + 1))
     else:
-        raise SystemExit('Census batch failed repeatedly')
+        raise RuntimeError('Census batch failed repeatedly')
+
+def parse_census(text, expected):
     out = {}
-    for row in csv.reader(io.StringIO(r.text)):
-        if len(row) < 3: continue
+    seen = set()
+    for row in csv.reader(io.StringIO(text)):
+        if not row: continue
+        if len(row) < 3: raise ValueError('Incomplete Census response')
         idx = int(row[0])
-        if row[2] == 'Match' and len(row) >= 6 and ',' in row[5]:
+        if idx not in range(expected) or idx in seen or row[2] not in ('Match', 'No_Match', 'Tie'):
+            raise ValueError('Unexpected Census result')
+        seen.add(idx)
+        if row[2] == 'Match':
+            if len(row) < 6 or ',' not in row[5]: raise ValueError('Missing Census coordinates')
             lng, lat = (float(v) for v in row[5].split(','))
+            if not (-90 <= lat <= 90 and -180 <= lng <= 180): raise ValueError('Invalid Census coordinates')
             out[idx] = {'lat': lat, 'lng': lng, 'match_type': row[3], 'matched_address': row[4]}
+    if len(seen) != expected: raise ValueError('Truncated Census response')
     return out
 
 def geocode(limit, chunk):
@@ -122,18 +141,23 @@ def geocode(limit, chunk):
         FROM public.projects p LEFT JOIN leads.project_geocodes g ON g.project_number = p.project_number
         WHERE g.project_number IS NULL
            OR g.input_address <> concat_ws(' | ', btrim(coalesce(p.location_address,'')), btrim(coalesce(p.location_city,'')), btrim(coalesce(p.location_zip,'')))
-        ORDER BY p.registration_date DESC NULLS LAST""", 'params': []}], read_only=True)[0]
+        ORDER BY p.registration_date DESC NULLS LAST, p.project_number
+        LIMIT $1""", 'params': [limit]}], read_only=True)[0]
     by_addr = {}
     for p in projects:
         by_addr.setdefault(address_key(p), []).append(p)
-    keys = list(by_addr)[:limit]
-    print(f'{len(projects)} projects need geocoding ({len(by_addr)} unique addresses); doing {len(keys)}')
+    keys = list(by_addr)
+    print(f'{len(projects)} projects selected for geocoding ({len(keys)} unique addresses)')
     done = 0
     for start in range(0, len(keys), chunk):
         part = keys[start:start + chunk]
         items = [((by_addr[k][0]['location_address'] or '').strip(), (by_addr[k][0]['location_city'] or '').strip(), (by_addr[k][0]['location_zip'] or '').strip()) for k in part]
         t0 = time.time()
-        matches = census_batch(items)
+        try:
+            matches = census_batch(items)
+        except RuntimeError:
+            print(f'Census batch {start // chunk + 1} failed; leaving {len(part)} addresses pending for a later run.', file=sys.stderr, flush=True)
+            continue
         rows = []
         for i, k in enumerate(part):
             m = matches.get(i)
@@ -179,7 +203,11 @@ def retry_clean(chunk):
     print(f'{len(rows)} unmatched projects; {len(keys)} cleaned addresses to retry')
     for start in range(0, len(keys), chunk):
         part = keys[start:start + chunk]
-        matches = census_batch(part)
+        try:
+            matches = census_batch(part)
+        except RuntimeError:
+            print(f'Census retry batch {start // chunk + 1} failed; leaving addresses pending.', file=sys.stderr, flush=True)
+            continue
         out = []
         for i, k in enumerate(part):
             m = matches.get(i)
@@ -198,10 +226,11 @@ def retry_clean(chunk):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--centroids', help='folder with 2024_Gaz_place_national.txt and 2024_Gaz_counties_national.txt')
-    ap.add_argument('--limit', type=int, default=0, help='max unique addresses to geocode (0 = skip geocoding)')
+    ap.add_argument('--limit', type=int, default=0, help='max new/changed projects to geocode, grouped by address (0 = skip geocoding)')
     ap.add_argument('--chunk', type=int, default=2500, help='addresses per Census batch request (max 10000)')
     ap.add_argument('--retry-clean', action='store_true', help='retry unmatched rows with suite/floor/duplicate-city text stripped')
     a = ap.parse_args()
+    if a.limit < 0 or a.chunk < 1: ap.error('limit must be nonnegative and chunk must be positive')
     sql(DDL)
     if a.centroids: load_centroids(a.centroids)
     if a.limit: geocode(a.limit, min(a.chunk, 10000))

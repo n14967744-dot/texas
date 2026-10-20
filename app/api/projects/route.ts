@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FilterError, parseFilters } from '@/lib/query';
 import { DatabaseError } from '@/lib/db';
 import { loadProjectList } from '@/lib/projects';
+import { LocationError, parseHereLocation } from '@/lib/here-location';
 
 export const runtime = 'nodejs';
 
@@ -14,10 +15,13 @@ const ERROR_HEADERS = { 'Cache-Control': 'private, no-store' };
 export async function GET(request: NextRequest) {
   try {
     const filters = parseFilters(request.nextUrl.searchParams);
-    const payload = await loadProjectList(filters);
-    return NextResponse.json(payload, { headers: CACHE_HEADERS });
+    const here = parseHereLocation(request.nextUrl.searchParams);
+    if (filters.sort === 'here' && !here) throw new FilterError('Nearest to me requires lat and lng.');
+    const payload = await loadProjectList(filters, here);
+    return NextResponse.json(payload, { headers: here ? ERROR_HEADERS : CACHE_HEADERS });
   } catch (error) {
-    const message = error instanceof FilterError || error instanceof DatabaseError ? error.message : 'Unable to load projects. Please try again.';
-    return NextResponse.json({ error: message }, { status: error instanceof FilterError ? 400 : 503, headers: ERROR_HEADERS });
+    const invalid = error instanceof FilterError || error instanceof LocationError;
+    const message = invalid || error instanceof DatabaseError ? error.message : 'Unable to load projects. Please try again.';
+    return NextResponse.json({ error: message }, { status: invalid ? 400 : 503, headers: ERROR_HEADERS });
   }
 }

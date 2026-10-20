@@ -1,17 +1,22 @@
 import 'server-only';
 import { readQueries } from './db';
 import { isBrowseOffice } from './offices';
-import { getRanking, getRankingEntry, PRIORITY_TIER_LABELS } from './smart-list-rankings';
+import { getRanking, getRankingEntry, priorityTier, PRIORITY_TIER_LABELS } from './smart-list-rankings';
 import { projectOrderBy } from './project-order';
 import { businessToday, buildWhere, FILTER_DEFAULTS, FilterError, type Filters } from './query';
-import { timingLabel } from './timing';
+import { timingInfo, timingLabel } from './timing';
 import { distanceLabel } from './distance-label';
 import { getReviewEntry } from './smart-list-review';
-import type { CoverageCounts, ProjectListResponse, ProjectRow } from './types';
+import { projectSighting, type FieldNote, type ProjectOverlay } from './field-notes';
+import { NOTE_COLUMNS } from './field-note-store';
+import type { HereLocation } from './here-location';
+import { capMapResults, MAP_LIMIT } from './map-results';
+import { toResearchView } from './research';
+import type { CoverageCounts, MapProject, Project, ProjectDetail, ProjectListResponse, ProjectMapResponse, ProjectRow } from './types';
 
 const LIST_COLUMNS = `project_number, project_name, facility_name, location_address, location_city, location_county,
   current_status, type_of_work, scope_of_work, estimated_cost, registration_date, start_date, completion_date, fetched_at,
-  distance_mi, geo_precision`;
+  distance_mi, here_mi, distance_office_id, geo_precision, site_state, site_state_observed_at, disposition, overlay_hidden`;
 
 type CountRow = {
   total: string | number;
@@ -67,7 +72,7 @@ function rankJoin(listId: string, bind: (value: string | number) => string): str
 function ordering(filters: Filters, params: (string | number)[], today: string) {
   const bind = bindMore(params);
   const join = filters.sort === 'rank' ? rankJoin(filters.list, bind) : '';
-  const todayParam = filters.sort === 'timing' ? bind(today) : `''`;
+  const todayParam = filters.sort === 'timing' || filters.sort === 'rank' ? bind(today) : `''`;
   return { join, order: projectOrderBy(filters, todayParam) };
 }
 
@@ -76,18 +81,23 @@ function mapRow(row: ProjectRow, today: string): ProjectRow {
   const miles = rawMiles == null || rawMiles === '' ? null : Math.round(Number(rawMiles) * 10) / 10;
   const flag = (row as { has_research?: unknown }).has_research;
   const researched = flag === true || flag === 't' || flag === 'true';
+  const timing = timingInfo(row, today, projectSighting(row));
   return {
     ...row,
     distance_mi: miles != null && Number.isFinite(miles) ? miles : null,
+    here_mi: row.here_mi == null || !Number.isFinite(Number(row.here_mi)) ? null : Math.round(Number(row.here_mi) * 10) / 10,
     has_research: researched,
-    timing_label: timingLabel(row, today),
+    timing_label: timing.label,
+    timing_tag: timing.tag,
+    timing_flags: timing.flags,
+    timing_tone: timing.tone,
   };
 }
 
-export async function loadProjectList(filters: Filters): Promise<ProjectListResponse> {
+export async function loadProjectList(filters: Filters, here: HereLocation | null = null): Promise<ProjectListResponse> {
   if (!isBrowseOffice(filters.office)) throw new FilterError('Unknown office.');
   const today = businessToday();
-  const compiled = buildWhere(filters, today);
+  const compiled = buildWhere(filters, today, here);
   const scope = buildWhere(scopeFilters(filters), today);
 
   const summarySql = `SELECT
@@ -177,10 +187,10 @@ function csvEscape(value: string | number | null | undefined) {
 }
 
 /** Full filtered export. Same WHERE and ORDER BY as the table, including distance, precision, and timing. */
-export async function loadProjectCsv(filters: Filters): Promise<string> {
+export async function loadProjectCsv(filters: Filters, here: HereLocation | null = null): Promise<string> {
   if (!isBrowseOffice(filters.office)) throw new FilterError('Unknown office.');
   const today = businessToday();
-  const compiled = buildWhere(filters, today);
+  const compiled = buildWhere(filters, today, here);
   const params = [...compiled.params];
   const { join, order } = ordering(filters, params, today);
   const result = await readQueries<ProjectRow>([{
@@ -202,11 +212,80 @@ export async function loadProjectCsv(filters: Filters): Promise<string> {
       row.project_number, row.project_name, row.facility_name, row.location_address, row.location_city, row.location_county,
       row.type_of_work, row.scope_of_work, row.estimated_cost, row.distance_mi, row.geo_precision,
       distanceLabel(row.distance_mi, row.geo_precision),
-      row.timing_label, row.start_date, row.completion_date, row.registration_date, row.current_status,
-      ranked?.rank ?? '', ranked ? PRIORITY_TIER_LABELS[ranked.tier] : '', ranked?.note ?? '',
+      timingLabel(row, today, projectSighting(row)), row.start_date, row.completion_date, row.registration_date, row.current_status,
+      ranked?.rank ?? '', ranked ? PRIORITY_TIER_LABELS[priorityTier(ranked.tier, row.timing_tone)] : '', ranked?.note ?? '',
       review?.decision ?? '', review?.reason ?? '',
     ];
     lines.push(values.map((value) => csvEscape(value)).join(','));
   }
   return lines.join('\n');
+}
+
+/** Same filters and ordering as the list, with no page offset or large project payloads. */
+export async function loadProjectMap(filters: Filters, here: HereLocation | null = null): Promise<ProjectMapResponse> {
+  const today = businessToday();
+  const compiled = buildWhere(filters, today, here);
+  const params = [...compiled.params];
+  const { join, order } = ordering(filters, params, today);
+  type MapRow = Pick<ProjectRow, 'project_number' | 'project_name' | 'facility_name' | 'location_city'
+    | 'current_status' | 'start_date' | 'completion_date' | 'site_state' | 'site_state_observed_at'>
+    & { eff_lat: number | null; eff_lng: number | null; geo_precision: string };
+  const [counts, rows] = await readQueries<{ total: number } | MapRow>([
+    { query: `SELECT count(*) AS total FROM ${compiled.from} WHERE ${compiled.where}`, params: compiled.params },
+    {
+      query: `SELECT project_number, project_name, facility_name, location_city, eff_lat, eff_lng, geo_precision,
+        current_status, start_date, completion_date, site_state, site_state_observed_at
+        FROM ${compiled.from} ${join} WHERE ${compiled.where} ORDER BY ${order} LIMIT ${MAP_LIMIT}`,
+      params,
+    },
+  ]);
+  const projects: MapProject[] = (rows.rows as MapRow[]).map((row) => {
+    const timing = timingInfo(row, today, projectSighting(row));
+    return {
+      project_number: row.project_number,
+      name: row.project_name || row.facility_name || row.project_number,
+      lat: row.eff_lat == null ? null : Number(row.eff_lat),
+      lng: row.eff_lng == null ? null : Number(row.eff_lng),
+      precision: row.geo_precision,
+      city: row.location_city,
+      timing_label: timing.label,
+      timing_tag: timing.tag,
+      timing_tone: timing.tone,
+    };
+  });
+  return capMapResults(projects, num((counts.rows[0] as { total: number })?.total));
+}
+
+/** Modal data is read server-side; the browser never needs the agent credential. */
+export async function loadProjectDetail(projectNumber: string): Promise<ProjectDetail | null> {
+  const columns = `project_number, project_name, facility_name, location_address, location_city, location_county,
+    current_status, type_of_work, registration_date, start_date, completion_date, fetched_at, estimated_cost, scope_of_work,
+    owner_name, owner_contact_name, owner_phone, owner_address, tenant_name, tenant_contact_name, tenant_phone, tenant_address,
+    design_firm_name, design_firm_phone, design_firm_address, filer_contact_name, project_url`
+    .split(',').map((column) => `p.${column.trim()}`).join(', ');
+  const [projects, research, notes] = await readQueries<Record<string, unknown>>([
+    {
+      query: `SELECT ${columns}, overlay.site_state, overlay.site_state_observed_at, overlay.disposition,
+        COALESCE(overlay.hidden, false) AS overlay_hidden, to_jsonb(overlay) AS overlay
+        FROM public.projects p
+        LEFT JOIN leads.project_overlay overlay ON overlay.project_number = p.project_number
+        WHERE p.project_number = $1 LIMIT 1`,
+      params: [projectNumber],
+    },
+    { query: 'SELECT * FROM leads.project_research WHERE project_number = $1 LIMIT 1', params: [projectNumber] },
+    {
+      query: `SELECT ${NOTE_COLUMNS} FROM leads.field_notes n
+        WHERE project_number = $1 AND superseded_at IS NULL ORDER BY observed_at DESC, n.id DESC`,
+      params: [projectNumber],
+    },
+  ]);
+  if (!projects.rows.length) return null;
+  const row = projects.rows[0];
+  return {
+    ...mapRow(row as unknown as ProjectRow, businessToday()) as Project,
+    has_research: research.rows.length > 0,
+    overlay: row.overlay as ProjectOverlay | null,
+    research: toResearchView(research.rows[0] ?? null),
+    field_notes: notes.rows as unknown as FieldNote[],
+  };
 }

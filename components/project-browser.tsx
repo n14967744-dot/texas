@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { activeFilterChips } from '@/lib/filter-chips';
 import { listTitle } from '@/lib/browse-lists';
 import { sortMetaLabel } from '@/lib/browser-defaults';
@@ -13,6 +14,7 @@ import { FilterChips } from './browser/filter-chips';
 import { FiltersPanel } from './browser/filters-panel';
 import { OfficeListControls } from './browser/office-list-controls';
 import { PaginationBar } from './browser/pagination-bar';
+import { ProjectMap } from './browser/project-map';
 import { ResultsCards } from './browser/results-cards';
 import { ResultsTable } from './browser/results-table';
 import { SearchBox } from './browser/search-box';
@@ -24,6 +26,7 @@ import { SiteHeader } from './site-header';
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'distance', label: 'Distance' },
+  { key: 'here', label: 'Nearest to me' },
   { key: 'timing', label: 'Timing' },
   { key: 'start_date', label: 'Planned start' },
   { key: 'completion_date', label: 'Planned finish' },
@@ -42,6 +45,7 @@ export function ProjectBrowser({
   initialData: ProjectListResponse | null;
 }) {
   const state = useBrowserState(initialFilters, initialData);
+  const [view, setView] = useState<'list' | 'map'>('list');
   const { filters, data } = state;
   const nearestOffice = filters.office === ALL_TEXAS_ID;
   const office = getOfficeBranch(filters.office);
@@ -117,6 +121,20 @@ export function ProjectBrowser({
 
           {list && <p className="view-description">{list.description}</p>}
 
+          <div className="location-map-controls">
+            <div className="view-toggle" role="group" aria-label="Project view">
+              <button type="button" className="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>List</button>
+              <button type="button" className="button" aria-pressed={view === 'map'} onClick={() => setView('map')}>Map</button>
+            </div>
+            {state.here ? (
+              <button type="button" className="button" onClick={state.turnOffLocation}>Turn off location</button>
+            ) : (
+              <button type="button" className="button" disabled={state.locating} onClick={state.enableLocation}>{state.locating ? 'Locating…' : 'Use my location'}</button>
+            )}
+            {state.locating && <button type="button" className="text-button" onClick={state.turnOffLocation}>Cancel</button>}
+            <span className="fine-print" role="status">{state.locationMessage || (state.here ? 'Location on · stored for this tab only.' : '')}</span>
+          </div>
+
           <div className="browse-meta">
             <span className="result-count" aria-live="polite">
               {showSkeleton ? 'Loading projects…' : state.error ? 'Projects unavailable' : `${total.toLocaleString()} projects`}
@@ -136,7 +154,7 @@ export function ProjectBrowser({
             )}
           </div>
 
-          <label className="mobile-sort select-control">
+          <label className="browser-sort select-control">
             <span>Sort</span>
             <select
               aria-label="Sort projects"
@@ -146,7 +164,7 @@ export function ProjectBrowser({
                 state.patch({ sort, direction });
               }}
             >
-              {SORT_OPTIONS.filter((option) => option.key !== 'rank' || hasRanking(filters.list)).map((option) => (
+              {SORT_OPTIONS.filter((option) => (option.key !== 'rank' || hasRanking(filters.list)) && (option.key !== 'here' || !!state.here)).map((option) => (
                 <optgroup key={option.key} label={option.label}>
                   <option value={`${option.key}:asc`}>{option.label}, ascending</option>
                   <option value={`${option.key}:desc`}>{option.label}, descending</option>
@@ -158,43 +176,53 @@ export function ProjectBrowser({
           {state.error && projects.length > 0 && (
             <p className="browse-error" role="alert">{state.error}</p>
           )}
-          <div ref={state.tableRegion} className="table-region" aria-busy={busy}>
-            <ResultsTable
-              projects={projects}
-              sort={filters.sort}
-              direction={filters.direction}
-              nearestOffice={nearestOffice}
-              listId={filters.list}
-              showSkeleton={showSkeleton}
-              error={projects.length ? '' : state.error}
-              onSort={state.toggleSort}
-              onOpen={state.setSelected}
-              onRetry={state.reload}
-            />
-            <ResultsCards
-              projects={projects}
-              nearestOffice={nearestOffice}
-              listId={filters.list}
-              showSkeleton={showSkeleton}
-              error={projects.length ? '' : state.error}
-              onOpen={state.setSelected}
-              onRetry={state.reload}
-            />
-          </div>
+          {view === 'map' ? (
+            <ProjectMap query={state.requestQuery} here={state.here} refreshKey={state.retry} onOpen={state.setSelected} />
+          ) : (
+            <>
+              <div ref={state.tableRegion} className="table-region" aria-busy={busy}>
+                <ResultsTable
+                  projects={projects}
+                  sort={filters.sort}
+                  direction={filters.direction}
+                  nearestOffice={nearestOffice}
+                  officeName={nearestOffice ? 'the nearest office' : officeName}
+                  locationEnabled={!!state.here}
+                  listId={filters.list}
+                  showSkeleton={showSkeleton}
+                  error={projects.length ? '' : state.error}
+                  onSort={state.toggleSort}
+                  onOpen={state.setSelected}
+                  onRetry={state.reload}
+                />
+                <ResultsCards
+                  projects={projects}
+                  nearestOffice={nearestOffice}
+                  officeName={nearestOffice ? 'the nearest office' : officeName}
+                  locationEnabled={!!state.here}
+                  listId={filters.list}
+                  showSkeleton={showSkeleton}
+                  error={projects.length ? '' : state.error}
+                  onOpen={state.setSelected}
+                  onRetry={state.reload}
+                />
+              </div>
 
-          <PaginationBar
-            page={data?.page ?? filters.page}
-            pages={data?.pages ?? 1}
-            pageSize={filters.pageSize}
-            total={state.error ? 0 : total}
-            first={first}
-            last={last}
-            busy={busy}
-            refreshing={state.refreshing}
-            error={Boolean(state.error) && !data}
-            onPage={state.goPage}
-            onPageSize={(pageSize) => state.patch({ pageSize })}
-          />
+              <PaginationBar
+                page={data?.page ?? filters.page}
+                pages={data?.pages ?? 1}
+                pageSize={filters.pageSize}
+                total={state.error ? 0 : total}
+                first={first}
+                last={last}
+                busy={busy}
+                refreshing={state.refreshing}
+                error={Boolean(state.error) && !data}
+                onPage={state.goPage}
+                onPageSize={(pageSize) => state.patch({ pageSize })}
+              />
+            </>
+          )}
         </section>
 
         <div className="workspace-footnote">

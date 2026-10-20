@@ -21,6 +21,7 @@ export function sortMetaLabel(sort: string, direction: 'asc' | 'desc'): string {
     project_name: 'project name',
     location_address: 'address',
     distance: 'distance',
+    here: 'distance from you',
     rank: 'priority rank',
     timing: 'timing',
   };
@@ -28,7 +29,7 @@ export function sortMetaLabel(sort: string, direction: 'asc' | 'desc'): string {
   let how: string;
   if (sort === 'estimated_cost') how = direction === 'desc' ? 'highest first' : 'lowest first';
   else if (sort === 'rank') how = direction === 'asc' ? 'best first' : 'lowest first';
-  else if (sort === 'distance') how = direction === 'asc' ? 'nearest first' : 'farthest first';
+  else if (sort === 'distance' || sort === 'here') how = direction === 'asc' ? 'nearest first' : 'farthest first';
   else if (sort === 'timing') how = direction === 'asc' ? 'soonest planned dates first' : 'state status first';
   else if (sort === 'completion_date' || sort === 'start_date') how = direction === 'asc' ? 'soonest first' : 'latest first';
   else if (sort.endsWith('_date')) how = direction === 'desc' ? 'newest first' : 'oldest first';

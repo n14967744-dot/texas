@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RANKINGS, getRanking, getRankingEntry, curatedProjectNumbers, rankOf, reportRankings, hiddenReasonCounts } from '../lib/smart-list-rankings.ts';
+import { RANKINGS, getRanking, getRankingEntry, curatedProjectNumbers, rankOf, reportRankings, hiddenReasonCounts, priorityTier } from '../lib/smart-list-rankings.ts';
+import { timingInfo } from '../lib/timing.ts';
 import { getSmartList, matchesSmartList } from '../lib/smart-lists.ts';
 import { getReviewEntry, hiddenProjectNumbers } from '../lib/smart-list-review.ts';
 import { buildWhere, parseFilters } from '../lib/query.ts';
@@ -117,6 +118,23 @@ test('bryan-priority ranks are contiguous 1..N and hidden rows are near the offi
   assert.equal(ranking.report!.radiusMi, 20);
 });
 
-test('bryan-priority notes use "Planned finish" wording', () => {
-  for (const e of getRanking('bryan-priority')!.ranked) assert.ok(!/Est\. completion/i.test(e.note), e.projectNumber);
+test('ranking notes leave timing to the shared live label', () => {
+  for (const e of getRanking('bryan-priority')!.ranked) {
+    assert.doesNotMatch(e.note, /likely mov(?:e|ing)[ -]in|under construction|^(?:finishes|starts) |planned finish|est\. completion/i, e.projectNumber);
+  }
+});
+
+test('Needs drive-by lowers priority without removing or changing snapshot membership', () => {
+  const entry = getRanking('bryan-priority')!.ranked[0];
+  const members = curatedProjectNumbers('bryan-priority');
+  const timing = timingInfo({ completion_date: '2020-01-01' }, '2026-10-20');
+  assert.equal(priorityTier(entry.tier, timing.tone), 'pipeline');
+  assert.equal(getRankingEntry('bryan-priority', entry.projectNumber), entry);
+  assert.deepEqual(curatedProjectNumbers('bryan-priority'), members);
+  assert.equal(matchesSmartList({ project_number: entry.projectNumber }, getSmartList('bryan-priority')!), true);
+  for (const tier of ['hot', 'warm', 'pipeline'] as const) {
+    assert.equal(priorityTier(tier, 'drive_by'), 'pipeline');
+    assert.equal(priorityTier(tier, 'stale'), tier);
+    assert.equal(priorityTier(tier, 'seen'), tier);
+  }
 });

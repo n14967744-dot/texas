@@ -1,6 +1,5 @@
 import { browserDefaults } from './browser-defaults.ts';
 import { listAvailable } from './browse-lists.ts';
-import { hiddenProjectNumbers } from './smart-list-review.ts';
 import { hasRanking } from './smart-list-rankings.ts';
 import { getSmartList } from './smart-lists.ts';
 import { DEFAULT_OFFICE_ID, OFFICE_COOKIE, resolveBrowseOffice } from './offices.ts';
@@ -33,9 +32,6 @@ export function resolveBrowserState(raw: URLSearchParams, cookieOffice: string |
     merged.set('direction', defaults.direction);
   }
   if (!raw.get('radius')) merged.set('radius', String(defaults.radius));
-  if ((merged.get('hidden') === '1' || merged.get('hidden') === 'true') && hiddenProjectNumbers(list).length === 0) {
-    merged.delete('hidden');
-  }
   return parseFilters(merged);
 }
 
@@ -46,6 +42,10 @@ export function resolveBrowserState(raw: URLSearchParams, cookieOffice: string |
 export function canonicalizeBrowseParams(raw: URLSearchParams, cookieOffice: string | null): string | null {
   const next = new URLSearchParams(raw);
   let changed = false;
+  // Location is accepted only by API requests, never by shareable page URLs.
+  for (const key of ['lat', 'lng']) {
+    if (next.has(key)) { next.delete(key); changed = true; }
+  }
   if (!raw.has('office')) {
     next.set('office', resolveBrowseOffice(null, cookieOffice, false));
     changed = true;
@@ -63,10 +63,6 @@ export function canonicalizeBrowseParams(raw: URLSearchParams, cookieOffice: str
   if (next.get('sort') === 'rank' && !hasRanking(effectiveList)) {
     next.delete('sort');
     next.delete('direction');
-    changed = true;
-  }
-  if ((next.get('hidden') === '1' || next.get('hidden') === 'true') && hiddenProjectNumbers(effectiveList).length === 0) {
-    next.delete('hidden');
     changed = true;
   }
   if (!changed) return null;

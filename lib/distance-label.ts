@@ -7,6 +7,21 @@ export function distanceLabel(miles: number | null | undefined, precision: strin
   return `${value.toFixed(1)} mi straight-line`;
 }
 
+/** Compact GPS wording; centroid distances retain the existing approximate marker. */
+export function hereDistanceLabel(
+  hereMiles: number | null | undefined,
+  officeMiles: number | null | undefined,
+  precision: string | null | undefined,
+  officeName: string,
+): string {
+  const approx = precision === 'city' || precision === 'county' ? '≈ ' : '';
+  const label = (miles: number | null | undefined, origin: string) =>
+    precision === 'none' || miles == null || !Number.isFinite(Number(miles))
+      ? `Distance from ${origin} unknown`
+      : `${approx}${Math.round(Number(miles))} mi from ${origin}`;
+  return `${label(hereMiles, 'you')} · ${label(officeMiles, officeName)}`;
+}
+
 export function distanceTitle(precision: string | null | undefined, nearestOffice: boolean): string {
   if (precision === 'none' || !precision) return 'No address, city, or county coordinate is on file for this project.';
   const base = nearestOffice

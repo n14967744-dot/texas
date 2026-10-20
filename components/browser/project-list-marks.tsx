@@ -1,11 +1,13 @@
 'use client';
 
-import { getRankingEntry, hasRanking, PRIORITY_TIER_LABELS, type SmartListRankingEntry } from '@/lib/smart-list-rankings';
+import { getRankingEntry, hasRanking, priorityTier, PRIORITY_TIER_LABELS, type SmartListRankingEntry } from '@/lib/smart-list-rankings';
 import { getReviewEntry, type SmartListReviewEntry } from '@/lib/smart-list-review';
+import type { TimingTone } from '@/lib/timing';
 
-function PriorityChip({ entry }: { entry: SmartListRankingEntry }) {
-  const label = PRIORITY_TIER_LABELS[entry.tier];
-  return <span className={`priority-chip ${entry.tier}`} title={`${label} priority`}>#{entry.rank} · {label}</span>;
+function PriorityChip({ entry, tone }: { entry: SmartListRankingEntry; tone?: TimingTone }) {
+  const tier = priorityTier(entry.tier, tone);
+  const label = PRIORITY_TIER_LABELS[tier];
+  return <span className={`priority-chip ${tier}`} title={`${label} priority · snapshot rank #${entry.rank}`}>#{entry.rank} · {label}</span>;
 }
 
 function PriorityNote({ note, clamp }: { note: string; clamp: boolean }) {
@@ -27,16 +29,18 @@ export function ProjectListMarks({
   listId,
   projectNumber,
   placement,
+  timingTone,
 }: {
   listId: string;
   projectNumber: string;
   placement: 'row' | 'overview';
+  timingTone?: TimingTone;
 }) {
   if (!listId) return null;
   const entry = hasRanking(listId) ? getRankingEntry(listId, projectNumber) : undefined;
   const review = getReviewEntry(listId, projectNumber);
   if (!entry && !review) return null;
-  const chip = entry ? <PriorityChip entry={entry} /> : null;
+  const chip = entry ? <PriorityChip entry={entry} tone={timingTone} /> : null;
   const note = entry?.note ? <PriorityNote note={entry.note} clamp={placement === 'row'} /> : null;
   const badges = review ? <ReviewBadges entry={review} /> : null;
   if (placement === 'overview') {

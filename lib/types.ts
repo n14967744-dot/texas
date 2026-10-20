@@ -1,4 +1,6 @@
 import type { ResearchView } from './research.ts';
+import type { TimingFlag, TimingTag, TimingTone } from './timing.ts';
+import type { Disposition, FieldNote, ProjectOverlay, SiteState } from './field-notes.ts';
 
 export type GeoPrecision = 'address' | 'city' | 'county' | 'none';
 
@@ -20,11 +22,20 @@ export interface ProjectRow {
   fetched_at: string | null;
   /** Straight-line miles. Null when the location is unknown. */
   distance_mi?: number | null;
+  here_mi?: number | null;
+  distance_office_id?: string | null;
   geo_precision?: GeoPrecision | string | null;
   /** True when leads.project_research has a row. */
   has_research?: boolean;
-  /** Cautious timing label from lib/timing.ts. */
+  site_state?: SiteState | null;
+  site_state_observed_at?: string | null;
+  disposition?: Disposition | null;
+  overlay_hidden?: boolean;
+  /** Plain timing label from lib/timing.ts. The age tag is timing_tag, not part of this string. */
   timing_label?: string;
+  timing_tag?: TimingTag | null;
+  timing_flags?: TimingFlag[];
+  timing_tone?: TimingTone;
 }
 
 export interface Project extends ProjectRow {
@@ -47,6 +58,8 @@ export interface Project extends ProjectRow {
 
 export interface ProjectDetail extends Project {
   research: ResearchView | null;
+  field_notes: FieldNote[];
+  overlay: ProjectOverlay | null;
 }
 
 export interface CoverageCounts {
@@ -66,4 +79,22 @@ export interface ProjectListResponse {
   latestFetch: string | null;
   facets: { cities: string[]; counties: string[]; workTypes: string[] };
   coverage: CoverageCounts;
+}
+
+export interface MapProject {
+  project_number: string;
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  precision: string;
+  city: string | null;
+  timing_label: string;
+  timing_tag: TimingTag | null;
+  timing_tone: TimingTone;
+}
+
+export interface ProjectMapResponse {
+  projects: MapProject[];
+  total: number;
+  truncated: boolean;
 }

@@ -292,7 +292,7 @@ def main():
         parser.error('Limits must be nonnegative; max-projects must be positive.')
     connection = os.environ.get('DATABASE_URL')
     if not connection:
-        raise SyncError('Set DATABASE_URL before running the updater.')
+        raise SyncError('Set DATABASE_URL before running the updater; this usually means the GitHub Actions repository secret DATABASE_URL is missing.')
     http = Http()
     db = Database(http, connection)
     today = datetime.now(ZoneInfo('America/Chicago')).date()
@@ -310,6 +310,8 @@ def main():
     try:
         if not args.dry_run:
             db.query('CREATE TABLE IF NOT EXISTS public.tabs_sync_runs (id text PRIMARY KEY, started_at timestamptz NOT NULL DEFAULT now(), finished_at timestamptz, status text NOT NULL, discovery_from date, discovery_through date, discovered integer DEFAULT 0, inserted integer DEFAULT 0, updated integer DEFAULT 0, failed integer DEFAULT 0)')
+            # Only the lease holder may close runs left behind by a killed updater.
+            db.query("UPDATE public.tabs_sync_runs SET status='abandoned',finished_at=now() WHERE status='running' AND id<>$1 AND started_at<now()-interval '3 hours'", [run_id])
         latest = db.query('SELECT max(registration_date)::text AS latest FROM public.projects')[0]['latest']
         begin = args.since or discovery_start(checkpoint, latest, today)
         if retry_from:
