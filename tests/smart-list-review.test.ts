@@ -37,8 +37,8 @@ test('hidden projects are excluded from SQL unless hidden=1', () => {
   assert.equal(whereShown.where.includes('project_number NOT IN'), false);
 });
 
-test('hidden=1 requires a smart list and serializes in params', () => {
-  assert.throws(() => parseFilters(new URLSearchParams({ hidden: '1' })));
+test('hidden=1 works on every list and serializes in params', () => {
+  assert.equal(parseFilters(new URLSearchParams({ hidden: '1' })).hidden, true);
   const params = filtersToSearchParams({
     ...FILTER_DEFAULTS,
     office: 'texas',

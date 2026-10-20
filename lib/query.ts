@@ -49,7 +49,7 @@ export interface Filters {
   filedPreset: FiledPreset | '';
   registeredFrom: string;
   registeredTo: string;
-  /** Curated / reviewed lists only. */
+  /** Include both disposition-hidden projects and curated review hides. */
   hidden: boolean;
   sort: SortKey;
   direction: 'asc' | 'desc';
@@ -170,8 +170,6 @@ export function parseFilters(params: URLSearchParams): Filters {
   const includeNoCost = flagParam(params, 'noCost', 'cost option');
   const includeUnknown = flagParam(params, 'unknown', 'unknown location option');
   const hidden = flagParam(params, 'hidden', 'hidden filter');
-  if (hidden && !list) throw new FilterError('Show hidden is only available on a list.');
-  if (hidden && hiddenProjectNumbers(list).length === 0) throw new FilterError('Show hidden is only available on a list with hidden entries.');
   if (sort === 'rank' && !(list && hasRanking(list))) throw new FilterError('Rank sort requires a ranked list.');
 
   return {
@@ -246,8 +244,13 @@ export function buildWhere(filters: Filters, today: string): CompiledWhere {
     params.push(value);
     return `$${params.length}`;
   };
-  const from = locatedFromSql(filters.office, bind);
+  const from = `(SELECT located.*, overlay.site_state, overlay.site_state_observed_at,
+      overlay.disposition, COALESCE(overlay.hidden, false) AS overlay_hidden
+    FROM ${locatedFromSql(filters.office, bind)}
+    LEFT JOIN leads.project_overlay overlay ON overlay.project_number = located.project_number
+  ) located`;
   const clauses: string[] = ['TRUE'];
+  if (!filters.hidden) clauses.push('overlay_hidden = false');
 
   if (filters.q) {
     const pattern = `%${filters.q.replace(/[\\%_]/g, '\\$&')}%`;

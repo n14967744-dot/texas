@@ -7,11 +7,14 @@ import { businessToday, buildWhere, FILTER_DEFAULTS, FilterError, type Filters }
 import { timingInfo, timingLabel } from './timing';
 import { distanceLabel } from './distance-label';
 import { getReviewEntry } from './smart-list-review';
-import type { CoverageCounts, ProjectListResponse, ProjectRow } from './types';
+import { projectSighting, type FieldNote, type ProjectOverlay } from './field-notes';
+import { NOTE_COLUMNS } from './field-note-store';
+import { toResearchView } from './research';
+import type { CoverageCounts, Project, ProjectDetail, ProjectListResponse, ProjectRow } from './types';
 
 const LIST_COLUMNS = `project_number, project_name, facility_name, location_address, location_city, location_county,
   current_status, type_of_work, scope_of_work, estimated_cost, registration_date, start_date, completion_date, fetched_at,
-  distance_mi, geo_precision`;
+  distance_mi, geo_precision, site_state, site_state_observed_at, disposition, overlay_hidden`;
 
 type CountRow = {
   total: string | number;
@@ -76,7 +79,7 @@ function mapRow(row: ProjectRow, today: string): ProjectRow {
   const miles = rawMiles == null || rawMiles === '' ? null : Math.round(Number(rawMiles) * 10) / 10;
   const flag = (row as { has_research?: unknown }).has_research;
   const researched = flag === true || flag === 't' || flag === 'true';
-  const timing = timingInfo(row, today);
+  const timing = timingInfo(row, today, projectSighting(row));
   return {
     ...row,
     distance_mi: miles != null && Number.isFinite(miles) ? miles : null,
@@ -206,11 +209,45 @@ export async function loadProjectCsv(filters: Filters): Promise<string> {
       row.project_number, row.project_name, row.facility_name, row.location_address, row.location_city, row.location_county,
       row.type_of_work, row.scope_of_work, row.estimated_cost, row.distance_mi, row.geo_precision,
       distanceLabel(row.distance_mi, row.geo_precision),
-      timingLabel(row, today), row.start_date, row.completion_date, row.registration_date, row.current_status,
+      timingLabel(row, today, projectSighting(row)), row.start_date, row.completion_date, row.registration_date, row.current_status,
       ranked?.rank ?? '', ranked ? PRIORITY_TIER_LABELS[priorityTier(ranked.tier, row.timing_tone)] : '', ranked?.note ?? '',
       review?.decision ?? '', review?.reason ?? '',
     ];
     lines.push(values.map((value) => csvEscape(value)).join(','));
   }
   return lines.join('\n');
+}
+
+/** Modal data is read server-side; the browser never needs the agent credential. */
+export async function loadProjectDetail(projectNumber: string): Promise<ProjectDetail | null> {
+  const columns = `project_number, project_name, facility_name, location_address, location_city, location_county,
+    current_status, type_of_work, registration_date, start_date, completion_date, fetched_at, estimated_cost, scope_of_work,
+    owner_name, owner_contact_name, owner_phone, owner_address, tenant_name, tenant_contact_name, tenant_phone, tenant_address,
+    design_firm_name, design_firm_phone, design_firm_address, filer_contact_name, project_url`
+    .split(',').map((column) => `p.${column.trim()}`).join(', ');
+  const [projects, research, notes] = await readQueries<Record<string, unknown>>([
+    {
+      query: `SELECT ${columns}, overlay.site_state, overlay.site_state_observed_at, overlay.disposition,
+        COALESCE(overlay.hidden, false) AS overlay_hidden, to_jsonb(overlay) AS overlay
+        FROM public.projects p
+        LEFT JOIN leads.project_overlay overlay ON overlay.project_number = p.project_number
+        WHERE p.project_number = $1 LIMIT 1`,
+      params: [projectNumber],
+    },
+    { query: 'SELECT * FROM leads.project_research WHERE project_number = $1 LIMIT 1', params: [projectNumber] },
+    {
+      query: `SELECT ${NOTE_COLUMNS} FROM leads.field_notes n
+        WHERE project_number = $1 AND superseded_at IS NULL ORDER BY observed_at DESC, n.id DESC`,
+      params: [projectNumber],
+    },
+  ]);
+  if (!projects.rows.length) return null;
+  const row = projects.rows[0];
+  return {
+    ...mapRow(row as unknown as ProjectRow, businessToday()) as Project,
+    has_research: research.rows.length > 0,
+    overlay: row.overlay as ProjectOverlay | null,
+    research: toResearchView(research.rows[0] ?? null),
+    field_notes: notes.rows as unknown as FieldNote[],
+  };
 }

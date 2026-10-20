@@ -7,7 +7,7 @@
  * First match wins. A sighting from the last 30 Chicago days then replaces a
  * label and drops its inferred age tag. Older valid sightings prevent the
  * no-sighting Needs drive-by tag, but leave the date label and Stale tag.
- * Sort SQL follows the filing only (sightings are not in the list query yet).
+ * Sort SQL follows the filing only; displayed labels can use the overlay sighting.
  */
 
 export type TimingTag = 'Behind?' | 'Stale' | 'Needs drive-by';
@@ -108,7 +108,7 @@ function observedIso(value: string): string | null {
   return businessToday(parsed);
 }
 
-function siteStateLabel(value: string): string {
+export function siteStateLabel(value: string): string {
   const key = value.trim().toLowerCase();
   return SITE_STATE_LABELS[key] ?? 'Checked';
 }

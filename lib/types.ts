@@ -1,5 +1,6 @@
 import type { ResearchView } from './research.ts';
 import type { TimingFlag, TimingTag, TimingTone } from './timing.ts';
+import type { Disposition, FieldNote, ProjectOverlay, SiteState } from './field-notes.ts';
 
 export type GeoPrecision = 'address' | 'city' | 'county' | 'none';
 
@@ -24,6 +25,10 @@ export interface ProjectRow {
   geo_precision?: GeoPrecision | string | null;
   /** True when leads.project_research has a row. */
   has_research?: boolean;
+  site_state?: SiteState | null;
+  site_state_observed_at?: string | null;
+  disposition?: Disposition | null;
+  overlay_hidden?: boolean;
   /** Plain timing label from lib/timing.ts. The age tag is timing_tag, not part of this string. */
   timing_label?: string;
   timing_tag?: TimingTag | null;
@@ -51,6 +56,8 @@ export interface Project extends ProjectRow {
 
 export interface ProjectDetail extends Project {
   research: ResearchView | null;
+  field_notes: FieldNote[];
+  overlay: ProjectOverlay | null;
 }
 
 export interface CoverageCounts {

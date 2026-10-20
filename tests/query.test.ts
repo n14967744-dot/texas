@@ -77,7 +77,6 @@ test('sort injection, prototype keys, invalid dates and pagination are rejected'
     { office: 'temple' },
     { office: 'all' },
     { list: 'bryan-priority', office: 'waco' },
-    { hidden: '1' },
     { sort: 'rank' },
     { radius: '0' },
     { radius: '500.001' },

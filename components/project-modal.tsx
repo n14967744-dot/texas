@@ -9,6 +9,8 @@ import type { ResearchView } from '@/lib/research';
 import type { ProjectDetail, ProjectRow } from '@/lib/types';
 import { ProjectListMarks } from './browser/project-list-marks';
 import { Icon } from './icons';
+import { siteStateLabel } from '@/lib/timing';
+import type { FieldNote } from '@/lib/field-notes';
 
 type Tab = 'overview' | 'contacts' | 'research';
 
@@ -71,6 +73,25 @@ function Contact({
 
 function ExternalLink({ href, children }: { href: string; children: ReactNode }) {
   return <a href={href} target="_blank" rel="noopener noreferrer">{children} <Icon name="external" size={14} /></a>;
+}
+
+function FieldNotesPanel({ notes }: { notes: FieldNote[] }) {
+  return (
+    <section className="scope-section">
+      <h3>Field notes</h3>
+      <p className="eyebrow">You saw</p>
+      {notes.length ? notes.map((note) => (
+        <article className="contact-card" key={note.id}>
+          <p><strong>{formatDate(note.observed_at)}</strong>{note.rep ? ` · ${note.rep}` : ''}</p>
+          <p>{[note.site_state ? siteStateLabel(note.site_state) : null, note.disposition?.replaceAll('_', ' ')].filter(Boolean).join(' · ')}</p>
+          {note.occupant_name && <p>Occupant: {note.occupant_name}</p>}
+          {note.occupant_contact_name && <p>Contact: {note.occupant_contact_name}</p>}
+          {note.occupant_phone && <p>{linkedContact(note.occupant_phone)}</p>}
+          {note.raw_text && <p style={{ whiteSpace: 'pre-wrap' }}>{note.raw_text}</p>}
+        </article>
+      )) : <p className="muted">No field notes yet — a drive-by will confirm the real status.</p>}
+    </section>
+  );
 }
 
 function ResearchPanel({ research }: { research: ResearchView }) {
@@ -275,6 +296,7 @@ export function ProjectModal({
             <div className="skeleton wide" /><div className="skeleton" /><div className="skeleton" /><div className="skeleton wide" />
           </div>
         ) : tab === 'overview' ? (
+          <>
           <div className="overview-grid">
             <div>
               <ProjectListMarks listId={listId} projectNumber={summary.project_number} timingTone={summary.timing_tone} placement="overview" />
@@ -298,7 +320,7 @@ export function ProjectModal({
               <section>
                 <h3>Timing</h3>
                 <dl>
-                  <Detail label="Timing" value={<ProjectTiming project={summary} today={today} />} />
+                  <Detail label="Timing" value={<ProjectTiming project={project} today={today} />} />
                   <Detail label="Planned start" value={formatDate(project.start_date)} />
                   <Detail label="Planned finish" value={formatDate(project.completion_date)} />
                   <Detail label={nearestOffice ? 'Nearest office (straight-line)' : 'Distance (straight-line)'} value={<span title={distanceTitle(summary.geo_precision, nearestOffice)}>{miles}</span>} />
@@ -313,6 +335,13 @@ export function ProjectModal({
               </section>
             </div>
           </div>
+          <FieldNotesPanel notes={project.field_notes} />
+          {project.research && <section className="scope-section">
+            <h3>Research found</h3>
+            <p>{project.research.endUser || 'Research is on file for this project.'}</p>
+            <button type="button" className="text-button" onClick={() => setTab('research')}>View research</button>
+          </section>}
+          </>
         ) : tab === 'contacts' ? (
           <>
             <div className="contacts-grid">

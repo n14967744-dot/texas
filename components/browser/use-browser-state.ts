@@ -7,7 +7,6 @@ import { readOfficeCookieFromDocument, resolveBrowserState, writeOfficeCookie } 
 import { clearProjectCache, readProjectCache, writeProjectCache } from '@/lib/project-cache';
 import { filtersToQueryString } from '@/lib/project-params';
 import type { Filters, SortKey } from '@/lib/query';
-import { hiddenProjectNumbers } from '@/lib/smart-list-review';
 import type { ProjectListResponse, ProjectRow } from '@/lib/types';
 
 const ASC_FIRST = new Set<SortKey>(['project_name', 'location_address', 'distance', 'rank', 'timing', 'start_date', 'completion_date']);
@@ -143,8 +142,7 @@ export function useBrowserState(initialFilters: Filters, initialData: ProjectLis
         sort = defaults.sort;
         direction = defaults.direction;
       }
-      const hidden = list && hiddenProjectNumbers(list).length > 0 ? current.hidden : false;
-      return { ...current, office, list, sort, direction, hidden, page: 1 };
+      return { ...current, office, list, sort, direction, page: 1 };
     });
     setSelected(null);
   }
@@ -154,8 +152,7 @@ export function useBrowserState(initialFilters: Filters, initialData: ProjectLis
       const defaults = browserDefaults({ office: current.office, list });
       const sort = list === 'bryan-priority' ? 'rank' as const : (current.sort === 'rank' ? defaults.sort : current.sort);
       const direction = list === 'bryan-priority' ? 'asc' as const : (current.sort === 'rank' ? defaults.direction : current.direction);
-      const hidden = list && hiddenProjectNumbers(list).length > 0 ? current.hidden : false;
-      return { ...current, list, sort, direction, hidden, page: 1 };
+      return { ...current, list, sort, direction, page: 1 };
     });
   }
 

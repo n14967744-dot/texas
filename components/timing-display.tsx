@@ -1,5 +1,6 @@
 import { TIMING_NOTE, timingInfo, type TimingInfo } from '@/lib/timing';
 import type { ProjectRow } from '@/lib/types';
+import { projectSighting } from '@/lib/field-notes';
 
 export function TimingDisplay({ info }: { info: TimingInfo }) {
   return (
@@ -17,6 +18,6 @@ export function ProjectTiming({ project, today }: { project: ProjectRow; today?:
     tag: project.timing_tag ?? null,
     flags: project.timing_flags ?? [],
     tone: project.timing_tone ?? 'unknown',
-  } : timingInfo(project, today);
+  } : timingInfo(project, today, projectSighting(project));
   return <TimingDisplay info={info} />;
 }
