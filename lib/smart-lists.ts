@@ -134,7 +134,7 @@ const BRYAN_PRIORITY: SmartListDefinition = {
   id: 'bryan-priority',
   title: 'Bryan priority',
   description:
-    'All project types within 20 miles of the Bryan office that are upcoming or still open, reviewed for copier/MFP/managed-print fit and ranked: finishing within 6 months first, then under construction, then not started; document-heavy uses (government, medical, schools, finance, offices) and larger jobs rank higher.',
+    'All project types within 20 miles of the Bryan office that are upcoming or still open, reviewed for copier/MFP/managed-print fit and ranked: finishing within 6 months first, then passed planned starts, then future starts; Needs drive-by rows stay visible at lower priority; document-heavy uses (government, medical, schools, finance, offices) and larger jobs rank higher.',
   curated: true,
   defaultOffice: 'bryan',
   defaultRadius: 20,

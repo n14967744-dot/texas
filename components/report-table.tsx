@@ -2,16 +2,14 @@ import { formatDate, formatMoney, safeSourceLink } from '@/lib/format';
 import { browseListHref } from '@/lib/redirects';
 import { PRIORITY_TIER_LABELS } from '@/lib/smart-list-rankings';
 import type { ReportRow } from '@/lib/reports';
-import { StageChip } from './status-badge';
-import { businessToday } from '@/lib/query';
-import { monthsFromToday, STAGE_NOTE } from '@/lib/stage';
+import { TimingDisplay } from './timing-display';
+import { TIMING_NOTE } from '@/lib/timing';
 
 export function projectListHref(listId: string, projectNumber: string) {
   return browseListHref(listId, { q: projectNumber, open: projectNumber });
 }
 
 export function ReportTable({ rows, listId, compact = false, showTier = false }: { rows: ReportRow[]; listId: string; compact?: boolean; showTier?: boolean }) {
-  const today = businessToday();
   return (
     <div className="report-table-wrap">
       <table className={`report-table${compact ? ' compact' : ''}`}>
@@ -23,7 +21,7 @@ export function ReportTable({ rows, listId, compact = false, showTier = false }:
             <th scope="col">Distance</th>
             <th scope="col">Est. cost</th>
             <th scope="col">Planned finish</th>
-            <th scope="col" title={STAGE_NOTE}>Stage</th>
+            <th scope="col" title={TIMING_NOTE}>Timing</th>
             <th scope="col">Why</th>
           </tr>
         </thead>
@@ -47,9 +45,8 @@ export function ReportTable({ rows, listId, compact = false, showTier = false }:
                 <td className="report-num">{row.cost != null ? formatMoney(row.cost) : '—'}</td>
                 <td className="report-num">
                   {row.completion ? formatDate(row.completion) : '—'}
-                  {monthsFromToday(row.completion, today) && <span className="relative-date">{monthsFromToday(row.completion, today)}</span>}
                 </td>
-                <td className="report-stage">{row.stage ? <StageChip stage={row.stage} /> : '—'}</td>
+                <td className="report-timing"><TimingDisplay info={row.timing} /></td>
                 <td className="report-note">{row.note}</td>
               </tr>
             );

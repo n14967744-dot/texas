@@ -11,8 +11,8 @@ function order(sort: SortKey, direction: 'asc' | 'desc', today = '$9') {
 test('list and export share one ORDER BY, including tie-breakers', () => {
   assert.equal(order('distance', 'asc'), 'distance_mi ASC NULLS LAST, project_number ASC');
   assert.equal(order('distance', 'desc'), 'distance_mi DESC NULLS LAST, project_number ASC');
-  assert.equal(order('rank', 'asc'), 'curated_rank.rank ASC NULLS LAST, project_number ASC');
-  assert.equal(order('rank', 'desc'), 'curated_rank.rank DESC NULLS LAST, project_number ASC');
+  assert.equal(order('rank', 'asc'), `(curated_rank.rank IS NULL) ASC, (${timingBucketSql('$9')} = 6) ASC, curated_rank.rank ASC NULLS LAST, project_number ASC`);
+  assert.equal(order('rank', 'desc'), `(curated_rank.rank IS NULL) ASC, (${timingBucketSql('$9')} = 6) ASC, curated_rank.rank DESC NULLS LAST, project_number ASC`);
   assert.equal(order('estimated_cost', 'asc'), 'estimated_cost ASC NULLS LAST, project_number ASC');
   assert.equal(order('estimated_cost', 'desc'), 'estimated_cost DESC NULLS LAST, project_number ASC');
   assert.equal(order('registration_date', 'desc'), 'registration_date DESC NULLS LAST, project_number ASC');

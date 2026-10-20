@@ -2,9 +2,9 @@ import 'server-only';
 import { readQueries } from './db';
 import { getOfficeBranch } from './offices';
 import { distanceToOffice } from './geo';
-import { deriveStage, type Stage } from './stage';
+import { timingInfo, type TimingInfo } from './timing';
 import { businessToday } from './query';
-import { getRanking, hiddenReasonCounts, type PriorityTier, type SmartListRanking, type SmartListRankingReport } from './smart-list-rankings';
+import { getRanking, hiddenReasonCounts, priorityTier, type PriorityTier, type SmartListRanking, type SmartListRankingReport } from './smart-list-rankings';
 
 export type ReportRow = {
   projectNumber: string;
@@ -17,7 +17,7 @@ export type ReportRow = {
   completion: string | null;
   status: string | null;
   startDate: string | null;
-  stage: Stage | null;
+  timing: TimingInfo;
   distanceMi: number | null;
 };
 
@@ -71,10 +71,11 @@ export async function loadRankingReport(listId: string): Promise<RankingReport |
   const rows = [...ranking.ranked].sort((a, b) => a.rank - b.rank).map((entry) => {
     const d = details.get(entry.projectNumber);
     const hit = office ? distanceToOffice(entry.projectNumber, office) : null;
+    const timing = timingInfo(d ?? {}, today);
     return {
       projectNumber: entry.projectNumber,
       rank: entry.rank,
-      tier: entry.tier,
+      tier: priorityTier(entry.tier, timing.tone),
       note: entry.note,
       name: d?.project_name || d?.facility_name || null,
       city: d?.location_city ?? null,
@@ -82,10 +83,10 @@ export async function loadRankingReport(listId: string): Promise<RankingReport |
       completion: d?.completion_date ?? null,
       status: d?.current_status ?? null,
       startDate: d?.start_date ?? null,
-      stage: d ? deriveStage(d, today) : null,
+      timing,
       distanceMi: hit ? Math.round(hit.distanceMi * 10) / 10 : null,
     };
-  });
+  }).sort((a, b) => Number(a.timing.tone === 'drive_by') - Number(b.timing.tone === 'drive_by') || a.rank - b.rank);
 
   return {
     ranking,

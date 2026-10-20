@@ -13,6 +13,7 @@
  *     radius coverage and the distance column work.
  */
 import { BRYAN_PRIORITY_RANKING } from './rankings/bryan-priority.ts';
+import type { TimingTone } from './timing.ts';
 
 export type PriorityTier = 'hot' | 'warm' | 'pipeline';
 
@@ -21,6 +22,11 @@ export const PRIORITY_TIER_LABELS: Record<PriorityTier, string> = {
   warm: 'Warm',
   pipeline: 'Pipeline',
 };
+
+/** Keep the snapshot rank, but lower the current priority of unconfirmed old dates. */
+export function priorityTier(tier: PriorityTier, tone?: TimingTone): PriorityTier {
+  return tone === 'drive_by' ? 'pipeline' : tier;
+}
 
 export type SmartListRankingEntry = {
   projectNumber: string;

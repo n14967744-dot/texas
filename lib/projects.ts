@@ -1,10 +1,10 @@
 import 'server-only';
 import { readQueries } from './db';
 import { isBrowseOffice } from './offices';
-import { getRanking, getRankingEntry, PRIORITY_TIER_LABELS } from './smart-list-rankings';
+import { getRanking, getRankingEntry, priorityTier, PRIORITY_TIER_LABELS } from './smart-list-rankings';
 import { projectOrderBy } from './project-order';
 import { businessToday, buildWhere, FILTER_DEFAULTS, FilterError, type Filters } from './query';
-import { timingLabel } from './timing';
+import { timingInfo, timingLabel } from './timing';
 import { distanceLabel } from './distance-label';
 import { getReviewEntry } from './smart-list-review';
 import type { CoverageCounts, ProjectListResponse, ProjectRow } from './types';
@@ -67,7 +67,7 @@ function rankJoin(listId: string, bind: (value: string | number) => string): str
 function ordering(filters: Filters, params: (string | number)[], today: string) {
   const bind = bindMore(params);
   const join = filters.sort === 'rank' ? rankJoin(filters.list, bind) : '';
-  const todayParam = filters.sort === 'timing' ? bind(today) : `''`;
+  const todayParam = filters.sort === 'timing' || filters.sort === 'rank' ? bind(today) : `''`;
   return { join, order: projectOrderBy(filters, todayParam) };
 }
 
@@ -76,11 +76,15 @@ function mapRow(row: ProjectRow, today: string): ProjectRow {
   const miles = rawMiles == null || rawMiles === '' ? null : Math.round(Number(rawMiles) * 10) / 10;
   const flag = (row as { has_research?: unknown }).has_research;
   const researched = flag === true || flag === 't' || flag === 'true';
+  const timing = timingInfo(row, today);
   return {
     ...row,
     distance_mi: miles != null && Number.isFinite(miles) ? miles : null,
     has_research: researched,
-    timing_label: timingLabel(row, today),
+    timing_label: timing.label,
+    timing_tag: timing.tag,
+    timing_flags: timing.flags,
+    timing_tone: timing.tone,
   };
 }
 
@@ -202,8 +206,8 @@ export async function loadProjectCsv(filters: Filters): Promise<string> {
       row.project_number, row.project_name, row.facility_name, row.location_address, row.location_city, row.location_county,
       row.type_of_work, row.scope_of_work, row.estimated_cost, row.distance_mi, row.geo_precision,
       distanceLabel(row.distance_mi, row.geo_precision),
-      row.timing_label, row.start_date, row.completion_date, row.registration_date, row.current_status,
-      ranked?.rank ?? '', ranked ? PRIORITY_TIER_LABELS[ranked.tier] : '', ranked?.note ?? '',
+      timingLabel(row, today), row.start_date, row.completion_date, row.registration_date, row.current_status,
+      ranked?.rank ?? '', ranked ? PRIORITY_TIER_LABELS[priorityTier(ranked.tier, row.timing_tone)] : '', ranked?.note ?? '',
       review?.decision ?? '', review?.reason ?? '',
     ];
     lines.push(values.map((value) => csvEscape(value)).join(','));

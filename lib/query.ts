@@ -203,11 +203,7 @@ export function parseFilters(params: URLSearchParams): Filters {
   };
 }
 
-export function businessToday(now = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
-  const part = (type: string) => parts.find((item) => item.type === type)!.value;
-  return `${part('year')}-${part('month')}-${part('day')}`;
-}
+export { businessToday } from './timing.ts';
 
 const SEARCH_FIELDS = [
   'project_name', 'facility_name', 'scope_of_work', 'location_address', 'location_city', 'location_county',

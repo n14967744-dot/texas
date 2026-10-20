@@ -1,5 +1,5 @@
 import type { ResearchView } from './research.ts';
-import type { TimingTag, TimingTone } from './timing.ts';
+import type { TimingFlag, TimingTag, TimingTone } from './timing.ts';
 
 export type GeoPrecision = 'address' | 'city' | 'county' | 'none';
 
@@ -27,7 +27,7 @@ export interface ProjectRow {
   /** Plain timing label from lib/timing.ts. The age tag is timing_tag, not part of this string. */
   timing_label?: string;
   timing_tag?: TimingTag | null;
-  timing_flags?: string[];
+  timing_flags?: TimingFlag[];
   timing_tone?: TimingTone;
 }
 

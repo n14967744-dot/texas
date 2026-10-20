@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { distanceLabel, distanceTitle } from '@/lib/distance-label';
 import { formatDate, formatMoney, safeHttpsUrl, safeSourceLink } from '@/lib/format';
 import { businessToday } from '@/lib/query';
-import { timingLabel } from '@/lib/timing';
+import { ProjectTiming } from './timing-display';
 import type { ResearchView } from '@/lib/research';
 import type { ProjectDetail, ProjectRow } from '@/lib/types';
 import { ProjectListMarks } from './browser/project-list-marks';
@@ -199,7 +199,6 @@ export function ProjectModal({
     { id: 'contacts', label: 'Contacts' },
     ...(showResearch ? [{ id: 'research' as const, label: 'Research' }] : []),
   ];
-  const label = summary.timing_label || timingLabel(summary, today);
   const miles = distanceLabel(summary.distance_mi, summary.geo_precision);
 
   function moveTab(key: string) {
@@ -278,7 +277,7 @@ export function ProjectModal({
         ) : tab === 'overview' ? (
           <div className="overview-grid">
             <div>
-              <ProjectListMarks listId={listId} projectNumber={summary.project_number} placement="overview" />
+              <ProjectListMarks listId={listId} projectNumber={summary.project_number} timingTone={summary.timing_tone} placement="overview" />
               <section className="scope-section">
                 <h3>Scope of work</h3>
                 <p>{project.scope_of_work || 'No scope description listed.'}</p>
@@ -299,7 +298,7 @@ export function ProjectModal({
               <section>
                 <h3>Timing</h3>
                 <dl>
-                  <Detail label="Timing" value={label} />
+                  <Detail label="Timing" value={<ProjectTiming project={summary} today={today} />} />
                   <Detail label="Planned start" value={formatDate(project.start_date)} />
                   <Detail label="Planned finish" value={formatDate(project.completion_date)} />
                   <Detail label={nearestOffice ? 'Nearest office (straight-line)' : 'Distance (straight-line)'} value={<span title={distanceTitle(summary.geo_precision, nearestOffice)}>{miles}</span>} />

@@ -1,15 +1,17 @@
 /**
  * One rep-facing timing label for lists, cards, and reports.
- * Today is an America/Chicago calendar date (see businessToday() in lib/query.ts).
+ * Today and sightings use America/Chicago calendar days, including across DST.
  * Planned dates are never described as finished or occupied. A missing date is not
  * treated as reached. Age tags lower the sort priority; they do not hide a row.
  *
  * First match wins. A sighting from the last 30 Chicago days then replaces a
- * date-based label and drops its tag. Inspection and closed filings stay as
- * state signals. Sort SQL follows the filing only (sightings are not in the list query).
+ * label and drops its inferred age tag. Older valid sightings prevent the
+ * no-sighting Needs drive-by tag, but leave the date label and Stale tag.
+ * Sort SQL follows the filing only (sightings are not in the list query yet).
  */
 
 export type TimingTag = 'Behind?' | 'Stale' | 'Needs drive-by';
+export type TimingFlag = 'Plans not reviewed';
 
 export type TimingTone =
   | 'ahead'
@@ -36,11 +38,11 @@ export type TimingSighting = {
 export type TimingInfo = {
   label: string;
   tag: TimingTag | null;
-  flags: string[];
+  flags: TimingFlag[];
   tone: TimingTone;
 };
 
-export const TIMING_NOTE = 'From planned dates on the state filing, compared with today in America/Chicago. A site visit in the last 30 days replaces the date label. Not proof the building is finished or that anyone has moved in.';
+export const TIMING_NOTE = 'Planned dates are estimates, compared with today in America/Chicago. Behind?, Stale and Needs drive-by prompt a site visit to confirm. A sighting within 30 days overrides the timing label. Inspected signals construction done, not occupancy; Closed describes the filing, not the site.';
 
 const PLANS_NOT_REVIEWED = 'Plans not reviewed';
 const BEHIND_DAYS = 90;
@@ -62,7 +64,10 @@ const SITE_STATE_LABELS: Record<string, string> = {
 };
 
 function isoDate(value: string | null | undefined): string | null {
-  return value && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
+  if (!value || !/^\d{4}-\d{2}-\d{2}(?:$|[T ])/.test(value)) return null;
+  const iso = value.slice(0, 10);
+  const parsed = new Date(`${iso}T12:00:00Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === iso ? iso : null;
 }
 
 /** Calendar days from `startIso` to `endIso`. Both are `YYYY-MM-DD`. */
@@ -80,8 +85,8 @@ function monthDay(iso: string): string {
   return `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
 }
 
-/** Same Chicago calendar date as businessToday(), for a timestamp on a sighting. */
-function chicagoIso(now: Date): string {
+/** Shared business clock. Date-only filing values are already calendar dates. */
+export function businessToday(now = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Chicago',
     year: 'numeric',
@@ -94,11 +99,13 @@ function chicagoIso(now: Date): string {
 
 function observedIso(value: string): string | null {
   const trimmed = value.trim();
+  if (!isoDate(trimmed)) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-  if (!/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return null;
-  const parsed = new Date(trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'));
-  if (Number.isNaN(parsed.getTime())) return trimmed.slice(0, 10);
-  return chicagoIso(parsed);
+  // Require an explicit offset: never interpret a sighting in the host timezone.
+  if (!/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(trimmed)) return null;
+  const parsed = new Date(trimmed.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'));
+  if (Number.isNaN(parsed.getTime())) return null;
+  return businessToday(parsed);
 }
 
 function siteStateLabel(value: string): string {
@@ -106,12 +113,12 @@ function siteStateLabel(value: string): string {
   return SITE_STATE_LABELS[key] ?? 'Checked';
 }
 
-function plansFlag(status: string, start: string | null, today: string): string[] {
+function plansFlag(status: string, start: string | null, today: string): TimingFlag[] {
   if (status !== 'Project Registered' || !start || start > today) return [];
   return daysAfter(start, today) > PLANS_LAG_DAYS ? [PLANS_NOT_REVIEWED] : [];
 }
 
-function baseTiming(row: TimingInput, today: string): Omit<TimingInfo, 'flags'> {
+function baseTiming(row: TimingInput, today: string, hasSighting: boolean): Omit<TimingInfo, 'flags'> {
   const status = (row.current_status || '').trim();
   if (status === 'Inspection Complete' || status === 'Inspection Completed') {
     return { label: 'Inspected', tag: null, tone: 'inspected' };
@@ -127,34 +134,36 @@ function baseTiming(row: TimingInput, today: string): Omit<TimingInfo, 'flags'> 
     const age = daysAfter(finish, today);
     const label = `Finish was ${monthYear(finish)}`;
     if (age <= BEHIND_DAYS) return { label, tag: 'Behind?', tone: 'behind' };
-    if (age <= STALE_DAYS) return { label, tag: 'Stale', tone: 'stale' };
+    if (age <= STALE_DAYS || hasSighting) return { label, tag: 'Stale', tone: 'stale' };
     return { label, tag: 'Needs drive-by', tone: 'drive_by' };
   }
-  if (start && start <= today) return { label: `Started: ${monthYear(start)}`, tag: null, tone: 'active' };
+  if (start && start <= today) return { label: `Planned start: ${monthYear(start)}`, tag: null, tone: 'active' };
   return { label: 'Timing not listed', tag: null, tone: 'unknown' };
 }
 
-function recentSighting(sighting: TimingSighting | undefined, today: string): { state: string; seen: string } | null {
+function validSighting(sighting: TimingSighting | undefined, today: string): { state: string; seen: string } | null {
   if (!sighting?.site_state?.trim() || !sighting.observed_at) return null;
   const seen = observedIso(sighting.observed_at);
-  if (!seen || seen > today || daysAfter(seen, today) > SIGHTING_DAYS) return null;
+  if (!seen || seen > today) return null;
   return { state: siteStateLabel(sighting.site_state), seen };
 }
 
-export function timingInfo(row: TimingInput, today: string, sighting?: TimingSighting): TimingInfo {
+/** A string clock is a Chicago YYYY-MM-DD; a Date clock is converted to Chicago. */
+export function timingInfo(row: TimingInput, clock: string | Date = new Date(), sighting?: TimingSighting): TimingInfo {
+  const today = clock instanceof Date ? businessToday(clock) : isoDate(clock);
+  if (!today || (typeof clock === 'string' && clock !== today)) throw new Error('Invalid timing business date.');
   const status = (row.current_status || '').trim();
   const flags = plansFlag(status, isoDate(row.start_date), today);
-  const base = baseTiming(row, today);
-  if (base.tone === 'inspected' || base.tone === 'closed') return { ...base, flags };
-  const seen = recentSighting(sighting, today);
-  if (!seen) return { ...base, flags };
+  const seen = validSighting(sighting, today);
+  const base = baseTiming(row, today, Boolean(seen));
+  if (!seen || daysAfter(seen.seen, today) > SIGHTING_DAYS) return { ...base, flags };
   return { label: `${seen.state} · seen ${monthDay(seen.seen)}`, tag: null, flags, tone: 'seen' };
 }
 
-/** Plain label, plus the age tag when there is one. Used by the CSV export. */
-export function timingLabel(row: TimingInput, today: string, sighting?: TimingSighting): string {
+/** Plain text with every tag, for exports and other non-visual consumers. */
+export function timingLabel(row: TimingInput, today: string | Date = new Date(), sighting?: TimingSighting): string {
   const info = timingInfo(row, today, sighting);
-  return info.tag ? `${info.label} · ${info.tag}` : info.label;
+  return [info.label, info.tag, ...info.flags].filter(Boolean).join(' · ');
 }
 
 const dateExpr = (column: string) => `NULLIF(${column}::text, '')::date`;
@@ -170,8 +179,8 @@ export function timingBucketSql(today: string): string {
   const start = dateExpr('start_date');
   const finish = dateExpr('completion_date');
   const day = `${today}::date`;
-  return `(CASE WHEN current_status IN ('Inspection Complete', 'Inspection Completed') THEN 7`
-    + ` WHEN current_status = 'Project Closed' THEN 8`
+  return `(CASE WHEN TRIM(current_status) IN ('Inspection Complete', 'Inspection Completed') THEN 7`
+    + ` WHEN TRIM(current_status) = 'Project Closed' THEN 8`
     + ` WHEN ${start} > ${day} THEN 1`
     + ` WHEN ${finish} >= ${day} THEN 2`
     + ` WHEN ${finish} >= ${day} - ${BEHIND_DAYS} THEN 4`

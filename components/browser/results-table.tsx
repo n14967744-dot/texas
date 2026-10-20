@@ -7,6 +7,7 @@ import { Icon } from '../icons';
 import { ScopePreview } from '../scope-preview';
 import { DistanceCell } from './distance-cell';
 import { ProjectListMarks } from './project-list-marks';
+import { ProjectTiming } from '../timing-display';
 
 const COLUMNS = 8;
 
@@ -112,7 +113,7 @@ export function ResultsTable({
                     {name}
                   </button>
                   {project.has_research && <span className="researched-badge">Researched</span>}
-                  <ProjectListMarks listId={listId} projectNumber={project.project_number} placement="row" />
+                  <ProjectListMarks listId={listId} projectNumber={project.project_number} timingTone={project.timing_tone} placement="row" />
                   <span className="secondary-line">{project.project_number}{project.facility_name && project.facility_name !== name ? ` · ${project.facility_name}` : ''}</span>
                 </td>
                 <td className="address-cell">
@@ -122,7 +123,7 @@ export function ResultsTable({
                 <td><ScopePreview scope={project.scope_of_work} /></td>
                 <td className="date-cell">{formatMoney(project.estimated_cost)}</td>
                 <td><DistanceCell miles={project.distance_mi} precision={project.geo_precision} nearestOffice={nearestOffice} /></td>
-                <td className="timing-cell">{project.timing_label || 'Timing not listed'}</td>
+                <td className="timing-cell"><ProjectTiming project={project} /></td>
                 <td className="date-cell">{formatDate(project.start_date)}</td>
                 <td className="date-cell">{formatDate(project.completion_date)}</td>
               </tr>
