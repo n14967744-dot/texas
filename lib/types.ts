@@ -22,6 +22,8 @@ export interface ProjectRow {
   fetched_at: string | null;
   /** Straight-line miles. Null when the location is unknown. */
   distance_mi?: number | null;
+  here_mi?: number | null;
+  distance_office_id?: string | null;
   geo_precision?: GeoPrecision | string | null;
   /** True when leads.project_research has a row. */
   has_research?: boolean;
@@ -77,4 +79,22 @@ export interface ProjectListResponse {
   latestFetch: string | null;
   facets: { cities: string[]; counties: string[]; workTypes: string[] };
   coverage: CoverageCounts;
+}
+
+export interface MapProject {
+  project_number: string;
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  precision: string;
+  city: string | null;
+  timing_label: string;
+  timing_tag: TimingTag | null;
+  timing_tone: TimingTone;
+}
+
+export interface ProjectMapResponse {
+  projects: MapProject[];
+  total: number;
+  truncated: boolean;
 }

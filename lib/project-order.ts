@@ -10,6 +10,7 @@ export function projectOrderBy(filters: Pick<Filters, 'sort' | 'direction'>, tod
   const dir = filters.direction === 'asc' ? 'ASC' : 'DESC';
   const tie = 'project_number ASC';
   if (filters.sort === 'distance') return `distance_mi ${dir} NULLS LAST, ${tie}`;
+  if (filters.sort === 'here') return `here_mi ${dir} NULLS LAST, ${tie}`;
   if (filters.sort === 'rank') {
     return `(curated_rank.rank IS NULL) ASC, (${timingBucketSql(todayParam)} = 6) ASC, curated_rank.rank ${dir} NULLS LAST, ${tie}`;
   }

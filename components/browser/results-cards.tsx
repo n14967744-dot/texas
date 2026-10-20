@@ -11,6 +11,8 @@ import { ProjectTiming } from '../timing-display';
 export function ResultsCards({
   projects,
   nearestOffice,
+  officeName,
+  locationEnabled,
   listId,
   showSkeleton,
   error,
@@ -19,6 +21,8 @@ export function ResultsCards({
 }: {
   projects: ProjectRow[];
   nearestOffice: boolean;
+  officeName: string;
+  locationEnabled: boolean;
   listId: string;
   showSkeleton: boolean;
   error: string;
@@ -73,7 +77,7 @@ export function ResultsCards({
             <dl className="project-card-facts">
               <div><dt>Scope</dt><dd><ScopePreview scope={project.scope_of_work} /></dd></div>
               <div><dt>Est. cost</dt><dd>{formatMoney(project.estimated_cost)}</dd></div>
-              <div><dt>{nearestOffice ? 'Nearest office' : 'Distance'}</dt><dd><DistanceCell miles={project.distance_mi} precision={project.geo_precision} nearestOffice={nearestOffice} /></dd></div>
+              <div><dt>{nearestOffice ? 'Nearest office' : 'Distance'}</dt><dd><DistanceCell miles={project.distance_mi} precision={project.geo_precision} nearestOffice={nearestOffice} hereMiles={project.here_mi} locationEnabled={locationEnabled} officeName={officeName} distanceOfficeId={project.distance_office_id} /></dd></div>
               <div><dt>Timing</dt><dd><ProjectTiming project={project} /></dd></div>
               <div><dt>Planned start</dt><dd>{formatDate(project.start_date)}</dd></div>
               <div><dt>Planned finish</dt><dd>{formatDate(project.completion_date)}</dd></div>

@@ -6,12 +6,15 @@ import { listAvailable } from '@/lib/browse-lists';
 import { readOfficeCookieFromDocument, resolveBrowserState, writeOfficeCookie } from '@/lib/browse-state';
 import { clearProjectCache, readProjectCache, writeProjectCache } from '@/lib/project-cache';
 import { filtersToQueryString } from '@/lib/project-params';
+import { withHereLocation } from '@/lib/here-location';
+import { useMyLocation } from './use-my-location';
 import type { Filters, SortKey } from '@/lib/query';
 import type { ProjectListResponse, ProjectRow } from '@/lib/types';
 
-const ASC_FIRST = new Set<SortKey>(['project_name', 'location_address', 'distance', 'rank', 'timing', 'start_date', 'completion_date']);
+const ASC_FIRST = new Set<SortKey>(['project_name', 'location_address', 'distance', 'here', 'rank', 'timing', 'start_date', 'completion_date']);
 
 export function useBrowserState(initialFilters: Filters, initialData: ProjectListResponse | null) {
+  const location = useMyLocation();
   const [filters, setFilters] = useState(initialFilters);
   const [searchText, setSearchText] = useState(initialFilters.q);
   const [data, setData] = useState<ProjectListResponse | null>(initialData);
@@ -51,19 +54,28 @@ export function useBrowserState(initialFilters: Filters, initialData: ProjectLis
     return () => window.clearTimeout(timer);
   }, [searchText, filters.q, ready]);
 
+  // GPS belongs only in API requests and the per-tab cache, never window.history.
   const query = useMemo(() => filtersToQueryString(filters), [filters]);
+  const requestQuery = useMemo(() => withHereLocation(query, location.here), [query, location.here]);
+
+  useEffect(() => {
+    if (ready && !location.here && filters.sort === 'here') {
+      setFilters((current) => ({ ...current, sort: 'distance', direction: 'asc', page: 1 }));
+    }
+  }, [ready, location.here, filters.sort]);
 
   useEffect(() => {
     if (!ready || seeded.current || !initialData) return;
-    writeProjectCache(query, initialData);
+    writeProjectCache(filtersToQueryString(initialFilters), initialData);
     seeded.current = true;
-  }, [ready, initialData, query]);
+  }, [ready, initialData, initialFilters]);
 
   useEffect(() => {
     if (!ready) return;
+    if (filters.sort === 'here' && !location.here) return;
     window.history.replaceState(null, '', query ? `?${query}` : '/');
     const controller = new AbortController();
-    const cached = forceFresh ? null : readProjectCache(query);
+    const cached = forceFresh ? null : readProjectCache(requestQuery);
     if (cached) {
       setData(cached);
       setLoading(false);
@@ -74,15 +86,16 @@ export function useBrowserState(initialFilters: Filters, initialData: ProjectLis
       setRefreshing(true);
     }
     setError('');
-    const url = forceFresh ? `/api/projects?${query}${query ? '&' : ''}_=${Date.now()}` : `/api/projects?${query}`;
-    fetch(url, { signal: controller.signal, cache: forceFresh ? 'no-store' : 'default' })
+    const url = forceFresh ? `/api/projects?${requestQuery}&_=${Date.now()}` : `/api/projects?${requestQuery}`;
+    fetch(url, { signal: controller.signal, cache: forceFresh || location.here ? 'no-store' : 'default' })
       .then(async (response) => {
         const payload = await response.json() as ProjectListResponse & { error?: string };
         if (!response.ok) throw new Error(payload.error || 'Unable to load projects.');
         return payload;
       })
       .then((payload) => {
-        writeProjectCache(query, payload);
+        if (controller.signal.aborted) return;
+        writeProjectCache(requestQuery, payload);
         setData(payload);
         if (payload.page !== filters.page) setFilters((current) => ({ ...current, page: payload.page }));
       })
@@ -99,7 +112,7 @@ export function useBrowserState(initialFilters: Filters, initialData: ProjectLis
     return () => controller.abort();
     // `data` is omitted so the previous rows stay up while a refetch runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, ready, retry]);
+  }, [requestQuery, ready, retry]);
 
   useEffect(() => {
     const target = pendingOpen.current;
@@ -184,16 +197,21 @@ export function useBrowserState(initialFilters: Filters, initialData: ProjectLis
   }
 
   function reload() {
-    clearProjectCache(query);
+    clearProjectCache(requestQuery);
     setForceFresh(true);
     setRetry((value) => value + 1);
+  }
+
+  function turnOffLocation() {
+    location.turnOffLocation();
+    setFilters((current) => current.sort === 'here' ? { ...current, sort: 'distance', direction: 'asc', page: 1 } : current);
   }
 
   async function exportCsv() {
     if (exporting) return;
     setExporting(true);
     try {
-      const response = await fetch(`/api/projects/export?${query}`);
+      const response = await fetch(`/api/projects/export?${requestQuery}`, { cache: 'no-store' });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({})) as { error?: string };
         throw new Error(payload.error || 'Unable to export projects.');
@@ -213,6 +231,8 @@ export function useBrowserState(initialFilters: Filters, initialData: ProjectLis
   }
 
   return {
+    ...location,
+    turnOffLocation,
     filters,
     searchText,
     setSearchText,
@@ -227,6 +247,8 @@ export function useBrowserState(initialFilters: Filters, initialData: ProjectLis
     setFiltersOpen,
     tableRegion,
     query,
+    requestQuery,
+    retry,
     patch,
     setOffice,
     setList,

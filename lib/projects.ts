@@ -9,12 +9,14 @@ import { distanceLabel } from './distance-label';
 import { getReviewEntry } from './smart-list-review';
 import { projectSighting, type FieldNote, type ProjectOverlay } from './field-notes';
 import { NOTE_COLUMNS } from './field-note-store';
+import type { HereLocation } from './here-location';
+import { capMapResults, MAP_LIMIT } from './map-results';
 import { toResearchView } from './research';
-import type { CoverageCounts, Project, ProjectDetail, ProjectListResponse, ProjectRow } from './types';
+import type { CoverageCounts, MapProject, Project, ProjectDetail, ProjectListResponse, ProjectMapResponse, ProjectRow } from './types';
 
 const LIST_COLUMNS = `project_number, project_name, facility_name, location_address, location_city, location_county,
   current_status, type_of_work, scope_of_work, estimated_cost, registration_date, start_date, completion_date, fetched_at,
-  distance_mi, geo_precision, site_state, site_state_observed_at, disposition, overlay_hidden`;
+  distance_mi, here_mi, distance_office_id, geo_precision, site_state, site_state_observed_at, disposition, overlay_hidden`;
 
 type CountRow = {
   total: string | number;
@@ -83,6 +85,7 @@ function mapRow(row: ProjectRow, today: string): ProjectRow {
   return {
     ...row,
     distance_mi: miles != null && Number.isFinite(miles) ? miles : null,
+    here_mi: row.here_mi == null || !Number.isFinite(Number(row.here_mi)) ? null : Math.round(Number(row.here_mi) * 10) / 10,
     has_research: researched,
     timing_label: timing.label,
     timing_tag: timing.tag,
@@ -91,10 +94,10 @@ function mapRow(row: ProjectRow, today: string): ProjectRow {
   };
 }
 
-export async function loadProjectList(filters: Filters): Promise<ProjectListResponse> {
+export async function loadProjectList(filters: Filters, here: HereLocation | null = null): Promise<ProjectListResponse> {
   if (!isBrowseOffice(filters.office)) throw new FilterError('Unknown office.');
   const today = businessToday();
-  const compiled = buildWhere(filters, today);
+  const compiled = buildWhere(filters, today, here);
   const scope = buildWhere(scopeFilters(filters), today);
 
   const summarySql = `SELECT
@@ -184,10 +187,10 @@ function csvEscape(value: string | number | null | undefined) {
 }
 
 /** Full filtered export. Same WHERE and ORDER BY as the table, including distance, precision, and timing. */
-export async function loadProjectCsv(filters: Filters): Promise<string> {
+export async function loadProjectCsv(filters: Filters, here: HereLocation | null = null): Promise<string> {
   if (!isBrowseOffice(filters.office)) throw new FilterError('Unknown office.');
   const today = businessToday();
-  const compiled = buildWhere(filters, today);
+  const compiled = buildWhere(filters, today, here);
   const params = [...compiled.params];
   const { join, order } = ordering(filters, params, today);
   const result = await readQueries<ProjectRow>([{
@@ -216,6 +219,41 @@ export async function loadProjectCsv(filters: Filters): Promise<string> {
     lines.push(values.map((value) => csvEscape(value)).join(','));
   }
   return lines.join('\n');
+}
+
+/** Same filters and ordering as the list, with no page offset or large project payloads. */
+export async function loadProjectMap(filters: Filters, here: HereLocation | null = null): Promise<ProjectMapResponse> {
+  const today = businessToday();
+  const compiled = buildWhere(filters, today, here);
+  const params = [...compiled.params];
+  const { join, order } = ordering(filters, params, today);
+  type MapRow = Pick<ProjectRow, 'project_number' | 'project_name' | 'facility_name' | 'location_city'
+    | 'current_status' | 'start_date' | 'completion_date' | 'site_state' | 'site_state_observed_at'>
+    & { eff_lat: number | null; eff_lng: number | null; geo_precision: string };
+  const [counts, rows] = await readQueries<{ total: number } | MapRow>([
+    { query: `SELECT count(*) AS total FROM ${compiled.from} WHERE ${compiled.where}`, params: compiled.params },
+    {
+      query: `SELECT project_number, project_name, facility_name, location_city, eff_lat, eff_lng, geo_precision,
+        current_status, start_date, completion_date, site_state, site_state_observed_at
+        FROM ${compiled.from} ${join} WHERE ${compiled.where} ORDER BY ${order} LIMIT ${MAP_LIMIT}`,
+      params,
+    },
+  ]);
+  const projects: MapProject[] = (rows.rows as MapRow[]).map((row) => {
+    const timing = timingInfo(row, today, projectSighting(row));
+    return {
+      project_number: row.project_number,
+      name: row.project_name || row.facility_name || row.project_number,
+      lat: row.eff_lat == null ? null : Number(row.eff_lat),
+      lng: row.eff_lng == null ? null : Number(row.eff_lng),
+      precision: row.geo_precision,
+      city: row.location_city,
+      timing_label: timing.label,
+      timing_tag: timing.tag,
+      timing_tone: timing.tone,
+    };
+  });
+  return capMapResults(projects, num((counts.rows[0] as { total: number })?.total));
 }
 
 /** Modal data is read server-side; the browser never needs the agent credential. */

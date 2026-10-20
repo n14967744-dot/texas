@@ -44,6 +44,8 @@ export function ResultsTable({
   sort,
   direction,
   nearestOffice,
+  officeName,
+  locationEnabled,
   listId,
   showSkeleton,
   error,
@@ -55,6 +57,8 @@ export function ResultsTable({
   sort: SortKey;
   direction: 'asc' | 'desc';
   nearestOffice: boolean;
+  officeName: string;
+  locationEnabled: boolean;
   listId: string;
   showSkeleton: boolean;
   error: string;
@@ -122,7 +126,7 @@ export function ResultsTable({
                 </td>
                 <td><ScopePreview scope={project.scope_of_work} /></td>
                 <td className="date-cell">{formatMoney(project.estimated_cost)}</td>
-                <td><DistanceCell miles={project.distance_mi} precision={project.geo_precision} nearestOffice={nearestOffice} /></td>
+                <td><DistanceCell miles={project.distance_mi} precision={project.geo_precision} nearestOffice={nearestOffice} hereMiles={project.here_mi} locationEnabled={locationEnabled} officeName={officeName} distanceOfficeId={project.distance_office_id} /></td>
                 <td className="timing-cell"><ProjectTiming project={project} /></td>
                 <td className="date-cell">{formatDate(project.start_date)}</td>
                 <td className="date-cell">{formatDate(project.completion_date)}</td>

@@ -1,4 +1,5 @@
 import { getOfficeBranch, VISIBLE_OFFICES } from './offices.ts';
+import type { HereLocation } from './here-location.ts';
 
 /** Mean Earth radius in miles. Spec requires 3958.8 for SQL haversine. */
 export const EARTH_RADIUS_MI = 3958.8;
@@ -50,7 +51,7 @@ function distanceExpr(officeId: string, bind: SqlBind): string {
  * county centroid. precision is address | city | county | none.
  * Distance is straight-line miles (one office, or the nearest visible office for All Texas).
  */
-export function locatedFromSql(officeId: string, bind: SqlBind): string {
+export function locatedFromSql(officeId: string, bind: SqlBind, here: HereLocation | null = null): string {
   const cityKey = cityNameKeySql('p.location_city');
   const countyKey = countyNameKeySql('p.location_county');
   const effLat = `CASE
@@ -69,9 +70,22 @@ export function locatedFromSql(officeId: string, bind: SqlBind): string {
       WHEN county_c.lat IS NOT NULL AND county_c.lng IS NOT NULL THEN 'county'
       ELSE 'none' END`;
   const miles = distanceExpr(officeId, bind);
+  const hereMiles = here ? haversineSql('base.eff_lat', 'base.eff_lng', bind(here.lat), bind(here.lng)) : 'NULL::float8';
+  // Label the actual nearest branch for All Texas, using the same straight-line calculation.
+  let distanceOffice = 'NULL::text';
+  if (here) {
+    if (officeId !== 'texas') distanceOffice = `${bind(officeId)}::text`;
+    else {
+      const branches = VISIBLE_OFFICES.map((office) => `(${bind(office.id)}::text, ${bind(office.lat)}::float8, ${bind(office.lng)}::float8)`);
+      distanceOffice = `(SELECT branch.office_id FROM (VALUES ${branches.join(', ')}) AS branch(office_id, lat, lng)
+        ORDER BY ${haversineSql('base.eff_lat', 'base.eff_lng', 'branch.lat', 'branch.lng')}, branch.office_id LIMIT 1)`;
+    }
+  }
   return `(
     SELECT base.*,
-      CASE WHEN base.eff_lat IS NULL OR base.eff_lng IS NULL THEN NULL ELSE ${miles} END AS distance_mi
+      CASE WHEN base.eff_lat IS NULL OR base.eff_lng IS NULL THEN NULL ELSE ${miles} END AS distance_mi,
+      CASE WHEN base.eff_lat IS NULL OR base.eff_lng IS NULL THEN NULL ELSE ${hereMiles} END AS here_mi,
+      CASE WHEN base.eff_lat IS NULL OR base.eff_lng IS NULL THEN NULL ELSE ${distanceOffice} END AS distance_office_id
     FROM (
       SELECT p.*,
         (${effLat}) AS eff_lat,

@@ -6,6 +6,7 @@ import { hiddenProjectNumbers } from './smart-list-review.ts';
 import { hasRanking } from './smart-list-rankings.ts';
 import { presetRange, type FiledPreset, type FinishPreset, type StartPreset } from './date-presets.ts';
 import { locatedFromSql, type SqlBind } from './location-sql.ts';
+import type { HereLocation } from './here-location.ts';
 
 export type SqlQuery = { query: string; params: (string | number)[] };
 
@@ -17,6 +18,7 @@ export const SORTS = {
   project_name: 'project_name',
   location_address: 'location_address',
   distance: 'distance',
+  here: 'here_mi',
   rank: 'rank',
   timing: 'timing',
 } as const;
@@ -236,7 +238,7 @@ export type CompiledWhere = {
  * One WHERE for search, list, dates, cost, work type, place, and radius.
  * `from` is the located subquery (address, else city centroid, else county centroid).
  */
-export function buildWhere(filters: Filters, today: string): CompiledWhere {
+export function buildWhere(filters: Filters, today: string, here: HereLocation | null = null): CompiledWhere {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) throw new FilterError('Invalid business date.');
   if (!isBrowseOffice(filters.office)) throw new FilterError('Unknown office.');
   const params: (string | number)[] = [];
@@ -246,7 +248,7 @@ export function buildWhere(filters: Filters, today: string): CompiledWhere {
   };
   const from = `(SELECT located.*, overlay.site_state, overlay.site_state_observed_at,
       overlay.disposition, COALESCE(overlay.hidden, false) AS overlay_hidden
-    FROM ${locatedFromSql(filters.office, bind)}
+    FROM ${locatedFromSql(filters.office, bind, here)}
     LEFT JOIN leads.project_overlay overlay ON overlay.project_number = located.project_number
   ) located`;
   const clauses: string[] = ['TRUE'];

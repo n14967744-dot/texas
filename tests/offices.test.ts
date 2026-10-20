@@ -49,3 +49,17 @@ test('canonical browse URLs fill the office and drop a list the office cannot sh
   assert.equal(ranked.direction, 'asc');
   assert.equal(ranked.radius, 25);
 });
+
+test('Show hidden survives browser state and canonicalization on every office/list, including All Projects', () => {
+  for (const office of ['bryan', 'waco', 'texas']) {
+    for (const list of ['', 'data-centers', ...(office === 'bryan' ? ['bryan-priority'] : [])]) {
+      for (const hidden of ['1', 'true']) {
+        const params = new URLSearchParams({ office, list, hidden });
+        assert.equal(resolveBrowserState(params, null).hidden, true);
+        assert.equal(canonicalizeBrowseParams(params, null), null);
+      }
+    }
+  }
+  assert.equal(canonicalizeBrowseParams(new URLSearchParams('office=waco&list=bryan-priority&hidden=1'), null), '/?office=waco&hidden=1');
+  assert.equal(resolveBrowserState(new URLSearchParams('office=waco&list=bryan-priority&hidden=1'), null).hidden, true);
+});
