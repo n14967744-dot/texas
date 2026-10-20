@@ -2,6 +2,7 @@ import importlib.util
 from datetime import date
 from pathlib import Path
 import unittest
+from unittest.mock import Mock, patch
 
 spec = importlib.util.spec_from_file_location('sync_tabs', Path(__file__).parents[1] / 'scripts/sync_tabs.py')
 sync = importlib.util.module_from_spec(spec)
@@ -83,6 +84,53 @@ class ParserTests(unittest.TestCase):
         decoded = json.loads(params[0])
         self.assertEqual(decoded[0]['project_name'], text)
         self.assertIsInstance(decoded[0]['sections'], dict)
+
+
+class RunRecoveryTests(unittest.TestCase):
+    def test_abandons_only_old_other_running_rows_after_acquiring_lease(self):
+        db = Mock()
+        def query(sql, params=None):
+            if 'RETURNING discovery_through,retry_from' in sql:
+                return [{'discovery_through': '2026-10-15', 'retry_from': None}]
+            if 'SELECT max(registration_date)' in sql:
+                raise sync.SyncError('Stop before any source requests')
+            return []
+        db.query.side_effect = query
+        with patch.dict(sync.os.environ, {'DATABASE_URL': 'test-only'}), patch.object(sync, 'Http'), \
+             patch.object(sync, 'Database', return_value=db), patch.object(sync.sys, 'argv', ['sync_tabs.py']):
+            with self.assertRaisesRegex(sync.SyncError, 'Stop before'):
+                sync.main()
+        calls = db.query.call_args_list
+        abandoned = next(i for i, call in enumerate(calls) if "status='abandoned'" in call.args[0])
+        leased = next(i for i, call in enumerate(calls) if 'RETURNING discovery_through,retry_from' in call.args[0])
+        self.assertGreater(abandoned, leased)
+        sql, params = calls[abandoned].args
+        self.assertIn('finished_at=now()', sql)
+        self.assertIn("status='running' AND id<>$1 AND started_at<now()-interval '3 hours'", sql)
+        self.assertEqual(params, calls[leased].args[1])
+        self.assertIn('lease_token=NULL', calls[-1].args[0])
+
+    def test_no_abandonment_without_lease_or_in_dry_run(self):
+        for args in ([], ['--dry-run']):
+            with self.subTest(args=args):
+                db = Mock()
+                def query(sql, params=None):
+                    if 'SELECT max(registration_date)' in sql:
+                        raise sync.SyncError('Dry run stopped')
+                    return []  # lease refused
+                db.query.side_effect = query
+                with patch.dict(sync.os.environ, {'DATABASE_URL': 'test-only'}), patch.object(sync, 'Http'), \
+                     patch.object(sync, 'Database', return_value=db), patch.object(sync.sys, 'argv', ['sync_tabs.py', *args]):
+                    with self.assertRaises(sync.SyncError):
+                        sync.main()
+                self.assertFalse(any("status='abandoned'" in call.args[0] for call in db.query.call_args_list))
+
+    def test_missing_connection_explains_actions_secret_before_any_requests(self):
+        with patch.dict(sync.os.environ, {}, clear=True), patch.object(sync, 'Http') as http, \
+             patch.object(sync.sys, 'argv', ['sync_tabs.py']):
+            with self.assertRaisesRegex(sync.SyncError, 'GitHub Actions repository secret DATABASE_URL is missing'):
+                sync.main()
+            http.assert_not_called()
 
 
 if __name__ == '__main__':
